@@ -1,10 +1,17 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:5000'; // Replace with production URL
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-const socket = io(SOCKET_URL, {
-    autoConnect: false,
-});
+const getSocket = () => {
+    const token = localStorage.getItem('access_token');
+    return io(SOCKET_URL, {
+        auth: { token },
+        withCredentials: true,
+        autoConnect: false,
+    });
+};
+
+const socket = getSocket();
 
 export const connectSocket = () => {
     if (!socket.connected) socket.connect();
@@ -19,18 +26,7 @@ export const joinTrip = (tripId) => {
 };
 
 export const updateDriverLocation = (data) => {
-    // data: { tripId, lat, lng, speed }
     socket.emit('updateLocation', data);
-};
-
-export const sendBookingRequest = (data) => {
-    socket.emit('bookingRequest', data);
-};
-
-export const subscribeToNotifications = (userId, callback) => {
-    socket.on(`notification_${userId}`, (data) => {
-        callback(data);
-    });
 };
 
 export const subscribeToLocationUpdates = (callback) => {

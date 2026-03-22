@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Truck, CheckCircle, MapPin, Loader2, Navigation, Clock } from 'lucide-react';
-import { styles } from '../../utils/styles';
-import api from '../../services/api';
+import { styles } from '../../../styles/styles';
+import { getTrips } from '../../../api/tripService';
 import { MapContainer, TileLayer, Marker, useMap, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -19,10 +19,6 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
-  withCredentials: true
-});
-
 const RecenterMap = ({ position }) => {
   const map = useMap();
   useEffect(() => {
@@ -33,13 +29,11 @@ const RecenterMap = ({ position }) => {
 
 const OSRMRoute = ({ origin, destination }) => {
   const [route, setRoute] = useState([]);
-
   useEffect(() => {
     const fetchRoute = async () => {
       try {
         const g1 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(origin)}&limit=1`).then(r => r.json());
         const g2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destination)}&limit=1`).then(r => r.json());
-        
         if (g1[0] && g2[0]) {
           const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${g1[0].lon},${g1[0].lat};${g2[0].lon},${g2[0].lat}?overview=full&geometries=geojson`;
           const res = await fetch(osrmUrl).then(r => r.json());
@@ -52,11 +46,10 @@ const OSRMRoute = ({ origin, destination }) => {
     };
     fetchRoute();
   }, [origin, destination]);
-
   return route.length > 0 ? <Polyline positions={route} color={styles.colors.primary} weight={4} opacity={0.6} /> : null;
 };
 
-const TripCard = ({ trip }) => {
+const TripCard = ({ trip, socket }) => {
   const [coords, setCoords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [address, setAddress] = useState('Loading address...');
@@ -90,15 +83,17 @@ const TripCard = ({ trip }) => {
     };
     initLocation();
 
-    socket.emit('joinTrip', trip.id);
-    const handleUpdate = async (data) => {
-      setCoords([data.lat, data.lng]);
-      const addr = await reverseGeocode(data.lat, data.lng);
-      setAddress(addr);
-    };
-    socket.on('locationUpdate', handleUpdate);
-    return () => socket.off('locationUpdate', handleUpdate);
-  }, [trip]);
+    if (socket) {
+        socket.emit('joinTrip', trip.id);
+        const handleUpdate = async (data) => {
+          setCoords([data.lat, data.lng]);
+          const addr = await reverseGeocode(data.lat, data.lng);
+          setAddress(addr);
+        };
+        socket.on('locationUpdate', handleUpdate);
+        return () => socket.off('locationUpdate', handleUpdate);
+    }
+  }, [trip, socket]);
 
   return (
     <div style={{ ...styles.common.card, padding: 0, overflow: 'hidden' }}>
@@ -116,7 +111,6 @@ const TripCard = ({ trip }) => {
           </MapContainer>
         )}
       </div>
-      
       <div style={{ padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div>
@@ -128,7 +122,6 @@ const TripCard = ({ trip }) => {
             <div style={{ fontWeight: 700, fontSize: '15px' }}>{trip.post.origin.split(',')[0]} &rarr; {trip.post.destination.split(',')[0]}</div>
           </div>
         </div>
-        
         <div style={{ backgroundColor: styles.colors.background, padding: '12px 16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', border: `1px solid ${styles.colors.border}` }}>
            <Navigation size={14} color={styles.colors.primary} />
            <span style={{ fontSize: '12px', fontWeight: 600 }}>{address}</span>
@@ -142,15 +135,22 @@ const TripsDashboard = () => {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const { isMobile } = useWindowWidth();
+  const socketRef = useRef(null);
 
   useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    socketRef.current = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
+        auth: { token },
+        withCredentials: true
+    });
     fetchTrips();
+    return () => { if (socketRef.current) socketRef.current.disconnect(); };
   }, []);
 
   const fetchTrips = async () => {
     try {
-      const res = await api.get('/trips');
-      setTrips(res.data);
+      const data = await getTrips();
+      setTrips(data);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
@@ -159,13 +159,11 @@ const TripsDashboard = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
       <section>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
           <div style={{ backgroundColor: `${styles.colors.primary}15`, padding: '6px', borderRadius: '10px' }}><Truck size={20} color={styles.colors.primary} /></div>
           <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>Active Monitoring</h2>
         </div>
-        
         {loading ? (
           <div style={{ textAlign: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color={styles.colors.primary} /></div>
         ) : activeTrips.length === 0 ? (
@@ -174,17 +172,15 @@ const TripsDashboard = () => {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(360px, 1fr))', gap: '24px' }}>
-            {activeTrips.map(trip => <TripCard key={trip.id} trip={trip} />)}
+            {activeTrips.map(trip => <TripCard key={trip.id} trip={trip} socket={socketRef.current} />)}
           </div>
         )}
       </section>
-
       <section>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
           <div style={{ backgroundColor: `${styles.colors.success}10`, padding: '6px', borderRadius: '10px' }}><CheckCircle size={20} color={styles.colors.success} /></div>
           <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>Completed</h2>
         </div>
-        
         <div style={{ ...styles.common.card, padding: 0, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: isMobile ? '600px' : 'auto' }}>
             <thead style={{ backgroundColor: '#F8FAFC' }}>

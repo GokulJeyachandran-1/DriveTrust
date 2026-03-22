@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, MapPin, Package, Shield, Loader2, Navigation, Search, CheckCircle, ChevronRight, ArrowRight } from 'lucide-react';
-import { styles } from '../../utils/styles';
-import api from '../../services/api';
+import { styles } from '../../../styles/styles';
+import { getMyLoads, createLoad } from '../../../api/customerService';
+import api from '../../../api/axios'; // For specific calls like bids
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -58,8 +59,8 @@ const CustomerDashboard = () => {
   const fetchLoads = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/customer/loads');
-      setLoads(res.data);
+      const data = await getMyLoads();
+      setLoads(data);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
@@ -90,8 +91,8 @@ const CustomerDashboard = () => {
   const handlePost = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.post('/customer/loads', formData);
-      setLoads([res.data, ...loads]);
+      const data = await createLoad(formData);
+      setLoads([data, ...loads]);
       setShowModal(false);
       setFormData({ origin: '', destination: '', requiredVehicle: 'Dry Van', estimatedWeightKg: '' });
       setMapPoints([]);
@@ -120,7 +121,6 @@ const CustomerDashboard = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '24px' : '32px' }}>
-      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 700, margin: 0 }}>Dashboard</h2>
@@ -132,40 +132,19 @@ const CustomerDashboard = () => {
         </button>
       </div>
 
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: (selectedLoadId && !isMobile) ? '1.4fr 1.1fr' : '1fr', 
-        gap: '24px' 
-      }}>
-        
+      <div style={{ display: 'grid', gridTemplateColumns: (selectedLoadId && !isMobile) ? '1.4fr 1.1fr' : '1fr', gap: '24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}><Loader2 className="animate-spin" size={32} color={styles.colors.primary} /></div>
           ) : (
             loads.map(load => (
-              <motion.div 
-                key={load.id} 
-                layout
-                onClick={() => viewBids(load.id)}
-                style={{ 
-                  ...styles.common.card, 
-                  cursor: 'pointer',
-                  border: selectedLoadId === load.id ? `2px solid ${styles.colors.primary}` : '1px solid #F1F5F9',
-                  padding: isMobile ? '20px' : '24px'
-                }}
-              >
+              <motion.div key={load.id} layout onClick={() => viewBids(load.id)} style={{ ...styles.common.card, cursor: 'pointer', border: selectedLoadId === load.id ? `2px solid ${styles.colors.primary}` : '1px solid #F1F5F9', padding: isMobile ? '20px' : '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ 
-                    padding: '4px 12px', borderRadius: '100px', 
-                    backgroundColor: load.status === 'OPEN' ? `${styles.colors.primary}10` : `${styles.colors.success}10`,
-                    color: load.status === 'OPEN' ? styles.colors.primary : styles.colors.success,
-                    fontSize: '11px', fontWeight: 700
-                  }}>
+                  <div style={{ padding: '4px 12px', borderRadius: '100px', backgroundColor: load.status === 'OPEN' ? `${styles.colors.primary}10` : `${styles.colors.success}10`, color: load.status === 'OPEN' ? styles.colors.primary : styles.colors.success, fontSize: '11px', fontWeight: 700 }}>
                     {load.status}
                   </div>
                   <span style={{ fontSize: '12px', color: styles.colors.textMuted }}>{new Date(load.createdAt).toLocaleDateString()}</span>
                 </div>
-
                 <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '12px' : '20px' }}>
                   <div style={{ flex: 1 }}>
                      <div style={{ fontSize: '10px', color: styles.colors.textMuted, fontWeight: 700 }}>FROM</div>
@@ -177,7 +156,6 @@ const CustomerDashboard = () => {
                      <div style={{ fontWeight: 700, fontSize: isMobile ? '14px' : '16px' }}>{load.destination.split(',')[0]}</div>
                   </div>
                 </div>
-
                 <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: `1px solid ${styles.colors.border}`, display: 'flex', gap: '20px' }}>
                    <div style={{ fontSize: '12px', color: styles.colors.textMuted }}>{load.requiredVehicle}</div>
                    <div style={{ fontSize: '12px', color: styles.colors.textMuted }}>{load.estimatedWeightKg} kg</div>
@@ -189,21 +167,11 @@ const CustomerDashboard = () => {
 
         <AnimatePresence>
           {selectedLoadId && (
-            <motion.div 
-              initial={isMobile ? { y: 300 } : { opacity: 0, x: 20 }}
-              animate={isMobile ? { y: 0 } : { opacity: 1, x: 0 }}
-              exit={isMobile ? { y: 300 } : { opacity: 0, x: 20 }}
-              style={isMobile ? {
-                position: 'fixed', bottom: 84, left: 16, right: 16, backgroundColor: 'white', 
-                borderRadius: '24px', padding: '24px', boxShadow: '0 -10px 40px rgba(0,0,0,0.1)', 
-                zIndex: 1002, border: `1px solid ${styles.colors.border}`, maxHeight: '60vh', overflowY: 'auto'
-              } : { ...styles.common.card, position: 'sticky', top: '96px', alignSelf: 'start' }}
-            >
+            <motion.div initial={isMobile ? { y: 300 } : { opacity: 0, x: 20 }} animate={isMobile ? { y: 0 } : { opacity: 1, x: 0 }} exit={isMobile ? { y: 300 } : { opacity: 0, x: 20 }} style={isMobile ? { position: 'fixed', bottom: 84, left: 16, right: 16, backgroundColor: 'white', borderRadius: '24px', padding: '24px', boxShadow: '0 -10px 40px rgba(0,0,0,0.1)', zIndex: 1002, border: `1px solid ${styles.colors.border}`, maxHeight: '60vh', overflowY: 'auto' } : { ...styles.common.card, position: 'sticky', top: '96px', alignSelf: 'start' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Carrier Quotes</h3>
                 <button onClick={() => setSelectedLoadId(null)} style={{ background: 'none', border: 'none', color: styles.colors.primary, fontWeight: 600 }}>Close</button>
               </div>
-
               {bidsLoading ? (
                  <div style={{ textAlign: 'center', padding: '30px' }}><Loader2 className="animate-spin" color={styles.colors.primary} /></div>
               ) : bids.length === 0 ? (
@@ -229,22 +197,8 @@ const CustomerDashboard = () => {
 
       <AnimatePresence>
         {showModal && (
-          <div style={{ 
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-            backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', zIndex: 1005
-          }}>
-            <motion.div 
-               initial={{ y: 100, opacity: 0 }}
-               animate={{ y: 0, opacity: 1 }}
-               exit={{ y: 100, opacity: 0 }}
-               style={{ 
-                 backgroundColor: 'white', width: '100%', maxWidth: '900px', 
-                 padding: isMobile ? '24px' : '32px', borderRadius: isMobile ? '24px 24px 0 0' : '24px',
-                 display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '24px',
-                 maxHeight: '90vh', overflowY: 'auto'
-               }}
-            >
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', zIndex: 1005 }}>
+            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }} style={{ backgroundColor: 'white', width: '100%', maxWidth: '900px', padding: isMobile ? '24px' : '32px', borderRadius: isMobile ? '24px 24px 0 0' : '24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
                   <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>New Shipment</h3>
@@ -270,7 +224,6 @@ const CustomerDashboard = () => {
                    <button type="submit" style={{ ...styles.common.buttonPrimary, width: '100%', height: '48px' }}>Broadcast Load</button>
                 </form>
               </div>
-              
               {!isMobile && (
                 <div style={{ flex: 1.2, height: '400px', borderRadius: '16px', overflow: 'hidden', border: `1px solid ${styles.colors.border}` }}>
                   <MapContainer center={[20.5937, 78.9629]} zoom={4} style={{ height: '100%', width: '100%' }}>
