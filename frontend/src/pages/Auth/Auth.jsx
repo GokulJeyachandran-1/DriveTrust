@@ -1,288 +1,147 @@
 import React, { useState } from 'react';
-import {
-    Mail,
-    Lock,
-    ArrowRight,
-    Truck,
-    User,
-    Phone,
-    Upload,
-    CheckCircle,
-    AlertCircle,
-    Loader2
-} from 'lucide-react';
-import {
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    updateProfile
-} from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from '../../firebase';
-import './Auth.css';
+import { styles } from '../../utils/styles';
+import api from '../../services/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShieldCheck, LogIn, ArrowRight, MapPin, Loader2 } from 'lucide-react';
 
-const Auth = () => {
-    const [isLogin, setIsLogin] = useState(true);
-    const [role, setRole] = useState('Customer');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [step, setStep] = useState(1); // 1: Input, 2: OTP (Customer) or Docs (Driver)
-    const navigate = useNavigate();
+const Auth = ({ onLogin }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    name: '',
+    role: 'CUSTOMER'
+  });
 
-    // Form State
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        phone: '',
-        password: '',
-        vehicleNumber: '',
-        truckType: '',
-        capacity: ''
-    });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const endpoint = isLogin ? '/auth/login' : '/auth/signup';
+      const res = await api.post(endpoint, formData);
+      onLogin(res.data.user, res.data.access_token);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Authentication failed');
+    } finally { setLoading(false); }
+  };
 
-    const [files, setFiles] = useState({
-        license: null,
-        registration: null,
-        insurance: null
-    });
-
-    const handleInputChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    const handleFileChange = (e) => {
-        setFiles({ ...files, [e.target.name]: e.target.files[0] });
-    };
-
-    const handleAuth = async (e) => {
-        e.preventDefault();
-        if (loading) return;
-        setLoading(true);
-        setError('');
-
-        try {
-            if (isLogin) {
-                const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
-                const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-
-                if (userDoc.exists()) {
-                    const userRole = userDoc.data().role;
-                    navigate(userRole === 'Driver' ? '/driver' : '/customer');
-                } else {
-                    setError("User profile not found. Please contact support.");
-                    await auth.signOut();
-                }
-            } else {
-                if (role === 'Customer' && step === 1) {
-                    setStep(2);
-                    setLoading(false);
-                    return;
-                } else if (role === 'Driver' && step === 1) {
-                    setStep(2);
-                    setLoading(false);
-                    return;
-                }
-
-                // Final Registration
-                let user;
-                try {
-                    const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-                    user = userCredential.user;
-                } catch (authErr) {
-                    if (authErr.code === 'auth/email-already-in-use') {
-                        const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
-                        user = userCredential.user;
-                    } else {
-                        throw authErr;
-                    }
-                }
-
-                await updateProfile(user, { displayName: formData.name });
-
-                let docUrls = {};
-                if (role === 'Driver') {
-                    for (const [key, file] of Object.entries(files)) {
-                        if (file) {
-                            try {
-                                const storageRef = ref(storage, `drivers/${user.uid}/${key}`);
-                                await uploadBytes(storageRef, file);
-                                docUrls[key] = await getDownloadURL(storageRef);
-                            } catch (storageErr) {
-                                console.warn(`Storage failed for ${key}:`, storageErr);
-                                docUrls[key] = `https://ui-avatars.com/api/?name=${key}&background=random`;
-                            }
-                        }
-                    }
-                }
-
-                await setDoc(doc(db, 'users', user.uid), {
-                    uid: user.uid,
-                    name: formData.name,
-                    email: formData.email,
-                    phone: formData.phone,
-                    role: role,
-                    isOnline: false,
-                    rating: '5.0',
-                    createdAt: new Date().toISOString(),
-                    ...(role === 'Driver' ? {
-                        vehicleNumber: formData.vehicleNumber,
-                        truckType: formData.truckType,
-                        capacity: formData.capacity,
-                        documents: docUrls,
-                        status: 'Pending Verification'
-                    } : {})
-                });
-
-                // Redirect after signup
-                navigate(role === 'Driver' ? '/driver' : '/customer');
-            }
-        } catch (err) {
-            console.error("Auth Error:", err);
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="auth-page">
-            <div className="auth-card">
-                <div className="auth-header">
-                    <div className="logo-container">
-                        <div className="logo-badge-sm">
-                            <Truck size={18} />
-                        </div>
-                        <span>DriveTrust</span>
-                    </div>
-                    <h1>{isLogin ? 'Welcome Back' : (step === 1 ? 'Create Account' : 'Final Steps')}</h1>
-                    <p>{isLogin ? 'Enter your details to access your dashboard' : (step === 1 ? 'Join our logistics network today' : 'Please provide the required verification')}</p>
+  return (
+    <div style={{ 
+      display: 'flex', minHeight: '100vh', 
+      backgroundColor: styles.colors.background,
+      fontFamily: styles.typography.fontFamily
+    }}>
+      {/* Left Branding Panel */}
+      <div style={{ 
+        flex: 1, 
+        background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+        padding: '60px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        color: 'white',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{ position: 'relative', zIndex: 2 }}>
+          <h1 style={{ fontSize: '36px', fontWeight: 700, marginBottom: '20px' }}>DriveTrust</h1>
+          <p style={{ fontSize: '18px', lineHeight: 1.6, opacity: 0.9, maxWidth: '450px' }}>
+            The next generation of Digital Freight Matching. Secured by Escrow, powered by real-time logistics.
+          </p>
+          <div style={{ marginTop: '48px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                   <ShieldCheck size={24} />
                 </div>
-
-                {isLogin && (
-                    <div className="role-selector">
-                        <button className={`role-btn ${role === 'Customer' ? 'active' : ''}`} onClick={() => setRole('Customer')}><User size={18} />Customer</button>
-                        <button className={`role-btn ${role === 'Driver' ? 'active' : ''}`} onClick={() => setRole('Driver')}><Truck size={18} />Driver</button>
-                    </div>
-                )}
-
-                {error && (
-                    <div className="error-alert">
-                        <AlertCircle size={18} />
-                        <span>{error}</span>
-                    </div>
-                )}
-
-                <form className="auth-form" onSubmit={handleAuth}>
-                    {isLogin ? (
-                        <>
-                            <div className="input-group">
-                                <Mail className="input-icon" />
-                                <input type="email" name="email" placeholder="Email Address" onChange={handleInputChange} required />
-                            </div>
-                            <div className="input-group">
-                                <Lock className="input-icon" />
-                                <input type="password" name="password" placeholder="Password" onChange={handleInputChange} required />
-                            </div>
-                        </>
-                    ) : (
-                        step === 1 ? (
-                            <>
-                                <div className="input-group">
-                                    <User className="input-icon" />
-                                    <input type="text" name="name" placeholder="Full Name" onChange={handleInputChange} required />
-                                </div>
-                                <div className="input-group">
-                                    <Mail className="input-icon" />
-                                    <input type="email" name="email" placeholder="Email Address" onChange={handleInputChange} required />
-                                </div>
-                                <div className="input-group">
-                                    <Phone className="input-icon" />
-                                    <input type="tel" name="phone" placeholder="Phone Number" onChange={handleInputChange} required />
-                                </div>
-                                <div className="input-group">
-                                    <Lock className="input-icon" />
-                                    <input type="password" name="password" placeholder="Password" onChange={handleInputChange} required />
-                                </div>
-                                <div className="role-selector secondary">
-                                    <button type="button" className={`role-btn ${role === 'Customer' ? 'active' : ''}`} onClick={() => setRole('Customer')}>Customer</button>
-                                    <button type="button" className={`role-btn ${role === 'Driver' ? 'active' : ''}`} onClick={() => setRole('Driver')}>Driver</button>
-                                </div>
-                            </>
-                        ) : (
-                            role === 'Customer' ? (
-                                <div className="otp-section animate-slide-up">
-                                    <p className="otp-instruction">We've sent a 6-digit code to <b>{formData.phone}</b></p>
-                                    <div className="otp-inputs">
-                                        {[1, 2, 3, 4, 5, 6].map(i => <input key={i} type="text" maxLength="1" className="otp-box" />)}
-                                    </div>
-                                    <p className="resend-text">Didn't receive? <span>Resend OTP</span></p>
-                                </div>
-                            ) : (
-                                <div className="driver-docs animate-slide-up">
-                                    <div className="input-group mb-2">
-                                        <input type="text" name="vehicleNumber" placeholder="Vehicle Number" onChange={handleInputChange} required />
-                                    </div>
-                                    <div className="input-flex mb-4">
-                                        <input type="text" name="truckType" placeholder="Truck Type" onChange={handleInputChange} required />
-                                        <input type="text" name="capacity" placeholder="Capacity (Tons)" onChange={handleInputChange} required />
-                                    </div>
-                                    <div className="file-uploads">
-                                        <label className="file-input">
-                                            <Upload size={16} /> Driving License
-                                            <input type="file" name="license" onChange={handleFileChange} />
-                                            {files.license && <CheckCircle size={14} className="text-success" />}
-                                        </label>
-                                        <label className="file-input">
-                                            <Upload size={16} /> RC Document
-                                            <input type="file" name="registration" onChange={handleFileChange} />
-                                            {files.registration && <CheckCircle size={14} className="text-success" />}
-                                        </label>
-                                        <label className="file-input">
-                                            <Upload size={16} /> Insurance
-                                            <input type="file" name="insurance" onChange={handleFileChange} />
-                                            {files.insurance && <CheckCircle size={14} className="text-success" />}
-                                        </label>
-                                    </div>
-                                </div>
-                            )
-                        )
-                    )}
-
-                    <button type="submit" className="btn btn-primary auth-btn" disabled={loading}>
-                        {loading ? <Loader2 className="animate-spin" /> : (isLogin ? 'Sign In' : (step === 1 ? 'Continue' : 'Complete Setup'))}
-                        {!loading && <ArrowRight size={20} />}
-                    </button>
-
-                    {step === 2 && !isLogin && (
-                        <button type="button" className="btn-back" onClick={() => setStep(1)}>Go Back</button>
-                    )}
-                </form>
-
-                <div className="auth-footer">
-                    <p>
-                        {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
-                        <span onClick={() => { setIsLogin(!isLogin); setStep(1); }} className="toggle-link">
-                            {isLogin ? 'Create one' : 'Sign in'}
-                        </span>
-                    </p>
+                <div>
+                   <div style={{ fontWeight: 700 }}>Secure Payments</div>
+                   <div style={{ fontSize: '14px', opacity: 0.8 }}>Funds locked in Escrow until delivery.</div>
                 </div>
-            </div>
-
-            <div className="auth-visual">
-                <div className="visual-content">
-                    <h2>{role === 'Customer' ? 'Move Goods with Confidence' : 'Grow Your Logistics Business'}</h2>
-                    <p>
-                        {role === 'Customer'
-                            ? 'Join thousands of businesses that trust DriveTrust for their daily shipping needs.'
-                            : 'Connect with verified customers and maximize your truck earnings today.'}
-                    </p>
+             </div>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                   <MapPin size={24} />
                 </div>
-                <div className="orb orb-1"></div>
-                <div className="orb orb-2"></div>
-            </div>
+                <div>
+                   <div style={{ fontWeight: 700 }}>Live Tracking</div>
+                   <div style={{ fontSize: '14px', opacity: 0.8 }}>Real-time GPS visibility for every shipment.</div>
+                </div>
+             </div>
+          </div>
         </div>
-    );
+        {/* Abstract background circles */}
+        <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '400px', height: '400px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
+        <div style={{ position: 'absolute', top: '-5%', left: '-5%', width: '300px', height: '300px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+      </div>
+
+      {/* Right Auth Panel */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
+        <div style={{ width: '100%', maxWidth: '400px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, color: styles.colors.textMain }}>{isLogin ? 'Welcome Back' : 'Get Started'}</h2>
+            <p style={{ color: styles.colors.textMuted, marginTop: '10px', fontSize: '14px' }}>{isLogin ? 'Enter your credentials to access your dashboard.' : 'Join the network of verified and trusted shippers & drivers.'}</p>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <AnimatePresence mode="wait">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} key={isLogin ? 'login' : 'signup'}>
+                {!isLogin && (
+                  <>
+                    <label style={styles.common.label}>Business Representative Name</label>
+                    <input type="text" style={styles.common.input} placeholder="John Doe" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+                  </>
+                )}
+
+                <label style={styles.common.label}>Email Address</label>
+                <input type="email" style={styles.common.input} placeholder="john@company.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+
+                <label style={styles.common.label}>Password</label>
+                <input type="password" style={styles.common.input} placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required />
+
+                {!isLogin && (
+                  <>
+                    <label style={styles.common.label}>I am joining as a...</label>
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+                      {['CUSTOMER', 'DRIVER'].map(role => (
+                        <div 
+                          key={role}
+                          onClick={() => setFormData({...formData, role})}
+                          style={{
+                            flex: 1, padding: '14px', borderRadius: '12px', textAlign: 'center', cursor: 'pointer', fontWeight: 700, fontSize: '14px',
+                            border: `2px solid ${formData.role === role ? styles.colors.primary : styles.colors.border}`,
+                            backgroundColor: formData.role === role ? `${styles.colors.primary}08` : 'white',
+                            color: formData.role === role ? styles.colors.primary : styles.colors.textMuted,
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {role === 'CUSTOMER' ? 'Customer' : 'Driver'}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            </AnimatePresence>
+
+            <button type="submit" disabled={loading} style={{ ...styles.common.buttonPrimary, width: '100%', height: '48px', marginTop: '12px', justifyContent: 'center', fontSize: '15px' }}>
+              {loading ? <Loader2 className="animate-spin" /> : (
+                <>
+                  {isLogin ? 'Sign In' : 'Create Account'}
+                  <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div style={{ textAlign: 'center', marginTop: '32px' }}>
+            <span style={{ color: styles.colors.textMuted, fontSize: '15px' }}>{isLogin ? "Don't have an account? " : "Already have an account? "}</span>
+            <button onClick={() => setIsLogin(!isLogin)} style={{ background: 'none', border: 'none', color: styles.colors.primary, fontWeight: 700, cursor: 'pointer', fontSize: '15px' }}>{isLogin ? 'Create one now' : 'Sign in here'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Auth;

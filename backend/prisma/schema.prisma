@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  DRIVER
+}
+
+enum LoadStatus {
+  OPEN
+  BOOKED
+  IN_TRANSIT
+  DELIVERED
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum EscrowStatus {
+  UNPAID
+  FUNDS_SECURED
+  RELEASED
+}
+
+model User {
+  id            String     @id @default(uuid())
+  name          String
+  email         String     @unique
+  passwordHash  String
+  role          Role
+  isKycVerified Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Relationships
+  loadPosts     LoadPost[] @relation("CustomerLoads")
+  bids          Bid[]      @relation("DriverBids")
+  trips         Trip[]     @relation("DriverTrips")
+
+  @@map("users")
+}
+
+model LoadPost {
+  id                String     @id @default(uuid())
+  customerId        String
+  origin            String
+  destination       String
+  requiredVehicle   String
+  estimatedWeightKg Float
+  status            LoadStatus @default(OPEN)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  // Relationships
+  customer          User       @relation("CustomerLoads", fields: [customerId], references: [id])
+  bids              Bid[]
+  trip              Trip?
+
+  @@map("load_posts")
+}
+
+model Bid {
+  id           String       @id @default(uuid())
+  postId       String
+  driverId     String
+  amount       Float
+  message      String?      @db.Text
+  status       BidStatus    @default(PENDING)
+  escrowStatus EscrowStatus @default(UNPAID)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  // Relationships
+  post         LoadPost     @relation(fields: [postId], references: [id])
+  driver       User         @relation("DriverBids", fields: [driverId], references: [id])
+
+  @@map("bids")
+}
+
+model Trip {
+  id              String    @id @default(uuid())
+  postId          String    @unique
+  driverId        String
+  currentLocation String?   
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relationships
+  post            LoadPost  @relation(fields: [postId], references: [id])
+  driver          User      @relation("DriverTrips", fields: [driverId], references: [id])
+
+  @@map("trips")
+}

@@ -1,156 +1,227 @@
-import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { auth } from '../../firebase';
-import './Layout.css';
-import {
-  LayoutDashboard,
-  Truck,
-  Map as MapIcon,
-  History,
-  Star,
-  Settings,
-  Bell,
-  UserCircle,
-  LogOut,
-  ChevronRight,
-  Users
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { 
+  Home, 
+  Package, 
+  Truck, 
+  LogOut, 
+  User,
+  Search,
+  Plus,
+  Navigation,
+  LogOut as LogOutIcon,
+  X
 } from 'lucide-react';
+import { styles } from '../../utils/styles';
+import { useWindowWidth } from '../../hooks/useWindowWidth';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
-  <div
-    className={`sidebar-item ${active ? 'active' : ''}`}
-    onClick={onClick}
-  >
-    <div className="item-icon-wrapper">
-      <Icon size={20} />
-    </div>
-    <span>{label}</span>
-    {active && <ChevronRight size={16} className="active-indicator" />}
-  </div>
-);
-
-const Navbar = ({ role = "Customer", user }) => (
-  <nav className="navbar">
-    <div className="navbar-logo">
-      <div className="logo-badge">
-        <Truck className="logo-icon" size={24} />
-      </div>
-      <span className="logo-text">Drive<span className="text-primary">Trust</span></span>
-    </div>
-
-    <div className="navbar-actions">
-      <div className="notification-bell">
-        <Bell size={20} />
-        <span className="bell-dot"></span>
-      </div>
-      <div className="nav-profile">
-        <div className="profile-info">
-          <div className="flex items-center gap-2">
-            <span className="profile-name">{user?.name || "User"}</span>
-            {user?.rating && (
-              <span className="inline-flex items-center text-xs font-bold text-yellow-600 bg-yellow-100 px-1.5 py-0.5 rounded shadow-sm" title="Your Rating">
-                <Star size={12} className="mr-1 fill-current" />
-                {user.rating}
-              </span>
-            )}
-          </div>
-          <span className="profile-role-badge">{role}</span>
-        </div>
-        <div className="profile-avatar">
-          <UserCircle size={32} />
-        </div>
-      </div>
-    </div>
-  </nav>
-);
-
-const Sidebar = ({ role = "Customer" }) => {
+const DashboardLayout = ({ children, user, onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isMobile } = useWindowWidth();
+  const role = user?.role;
+  const [showProfile, setShowProfile] = useState(false);
 
-  const customerItems = [
-    { id: 'find', path: '/customer/find', icon: MapIcon, label: 'Find Drivers' },
-    { id: 'active', path: '/customer/active', icon: Truck, label: 'Active Trips' },
-    { id: 'ratings', path: '/customer/ratings', icon: Star, label: 'Ratings' }
-  ];
-
-  const driverItems = [
-    { id: 'dashboard', path: '/driver/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'trips', path: '/driver/trips', icon: History, label: 'Trips' },
-    { id: 'active', path: '/driver/active', icon: Truck, label: 'Active Trip' },
-    { id: 'ratings', path: '/driver/ratings', icon: Star, label: 'Ratings' }
-  ];
-
-  const adminItems = [
-    { id: 'drivers', path: '/admin/drivers', icon: Users, label: 'Drivers' },
-    { id: 'trips', path: '/admin/trips', icon: History, label: 'View Trips' }
-  ];
-
-  const items = role === 'Driver' ? driverItems : role === 'Admin' ? adminItems : customerItems;
-  const currentPath = location.pathname;
-
-  const handleSignOut = async () => {
-    try {
-      await auth.signOut();
-      navigate('/');
-    } catch (e) {
-      console.error("Sign out error", e);
+  const getNavLinks = () => {
+    if (role === 'CUSTOMER') {
+      return [
+        { label: 'Market', path: '/customer', icon: <Home size={20} /> },
+        { label: 'Trips', path: '/customer/trips', icon: <Package size={20} /> }
+      ];
+    } else if (role === 'DRIVER') {
+      return [
+        { label: 'Loads', path: '/driver', icon: <Search size={20} /> },
+        { label: 'My Trips', path: '/driver/trips', icon: <Truck size={20} /> }
+      ];
     }
+    return [];
   };
 
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-scroll">
-        <div className="sidebar-group">
-          <p className="sidebar-label">PAGES</p>
-          {items.map((item) => {
-            // Check if current path starts with item path, default to first item if just root
-            const isActive = currentPath === item.path || (currentPath === `/${role.toLowerCase()}` && item.id === items[0].id);
-            return (
-              <SidebarItem
-                key={item.id}
-                icon={item.icon}
-                label={item.label}
-                active={isActive}
-                onClick={() => navigate(item.path)}
-              />
-            );
-          })}
-        </div>
-      </div>
+  const navLinks = getNavLinks();
 
-      <div className="sidebar-footer">
-        <button className="logout-btn" onClick={handleSignOut}>
-          <LogOut size={20} />
-          <span>Sign Out</span>
-        </button>
+  const ProfileModal = () => (
+    <motion.div 
+      initial={{ opacity: 0, y: 100 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 100 }}
+      style={{
+        position: 'fixed', bottom: isMobile ? 80 : 'auto', top: isMobile ? 'auto' : 80, 
+        right: isMobile ? 16 : '4%', left: isMobile ? 16 : 'auto',
+        backgroundColor: 'white', padding: '24px', borderRadius: '20px',
+        boxShadow: styles.colors.premiumShadow, zIndex: 1001,
+        border: `1px solid ${styles.colors.border}`, width: isMobile ? 'auto' : '300px'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Account</h3>
+        <button onClick={() => setShowProfile(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
       </div>
-    </aside>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+         <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: styles.colors.primary, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '18px' }}>
+            {user?.name.charAt(0)}
+         </div>
+         <div>
+            <div style={{ fontWeight: 700, fontSize: '16px' }}>{user?.name}</div>
+            <div style={{ fontSize: '12px', color: styles.colors.textMuted }}>{user?.role}</div>
+         </div>
+      </div>
+      <button 
+        onClick={onLogout}
+        style={{ ...styles.common.buttonPrimary, backgroundColor: styles.colors.danger, width: '100%', gap: '10px' }}
+      >
+        <LogOutIcon size={18} /> Sign Out
+      </button>
+    </motion.div>
   );
-};
-
-const DashboardLayout = ({ children, role = "Customer", user }) => {
-  const location = useLocation();
-  // Derive title from URL
-  const pathParts = location.pathname.split('/').filter(Boolean);
-  let activePageName = pathParts.length > 1 ? pathParts[1] : (role === "Driver" ? "dashboard" : role === "Admin" ? "drivers" : "find drivers");
-  activePageName = activePageName.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   return (
-    <div className="layout-container">
-      <Navbar role={role} user={user} />
-      <div className="layout-body">
-        <Sidebar role={role} />
-        <main className="main-content">
-          <div className="content-header">
-            <h2 className="page-title">{activePageName}</h2>
-            <div className="breadcrumb">Pages / {activePageName}</div>
+    <div style={{ ...styles.common.pageContainer, paddingBottom: isMobile ? '80px' : 0 }}>
+      {/* Top Navbar (Hidden on Mobile) */}
+      {!isMobile && (
+        <nav style={styles.common.navBar}>
+          <div style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
+              <h1 style={{ 
+                fontSize: '22px', 
+                fontWeight: 800, 
+                background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                margin: 0,
+                cursor: 'pointer'
+              }} onClick={() => navigate('/')}>
+                DriveTrust
+              </h1>
+
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {navLinks.map(link => (
+                  <button
+                    key={link.path}
+                    onClick={() => navigate(link.path)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 16px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      backgroundColor: location.pathname === link.path ? `${styles.colors.primary}10` : 'transparent',
+                      color: location.pathname === link.path ? styles.colors.primary : styles.colors.textMuted,
+                      fontWeight: 600,
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {link.icon}
+                    {link.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div 
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '4px 12px', borderRadius: '30px', backgroundColor: '#F8FAFC', border: '1px solid #F1F5F9' }}
+              onClick={() => setShowProfile(!showProfile)}
+            >
+               <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: styles.colors.primary, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '12px' }}>
+                  {user?.name.charAt(0)}
+               </div>
+               <div style={{ fontSize: '14px', fontWeight: 600 }}>{user?.name}</div>
+            </div>
           </div>
-          <div className="content-wrapper">
-            {children}
-          </div>
-        </main>
-      </div>
+        </nav>
+      )}
+
+      {/* Mobile Top Header */}
+      {isMobile && (
+        <div style={{ padding: '16px 20px', backgroundColor: 'white', borderBottom: `1px solid ${styles.colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+           <h1 style={{ fontSize: '18px', fontWeight: 800, color: styles.colors.primary, margin: 0 }}>DriveTrust</h1>
+           <div 
+            style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: styles.colors.primary, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '12px' }}
+            onClick={() => setShowProfile(!showProfile)}
+           >
+              {user?.name.charAt(0)}
+           </div>
+        </div>
+      )}
+
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {showProfile && <ProfileModal />}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <main style={{ 
+        flex: 1, 
+        padding: isMobile ? '20px' : '32px 5%',
+        maxWidth: '1200px',
+        margin: '0 auto',
+        width: '100%',
+        boxSizing: 'border-box'
+      }}>
+        {children}
+      </main>
+
+      {/* Bottom Nav (Mobile Only) */}
+      {isMobile && (
+        <nav style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, height: '70px',
+          backgroundColor: 'white', borderTop: `1px solid ${styles.colors.border}`,
+          display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+          paddingBottom: 'env(safe-area-inset-bottom)', zIndex: 1000,
+          boxShadow: '0 -4px 12px rgba(0,0,0,0.05)'
+        }}>
+          {navLinks.map(link => (
+            <button
+              key={link.path}
+              onClick={() => navigate(link.path)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'none',
+                border: 'none',
+                color: location.pathname === link.path ? styles.colors.primary : styles.colors.textMuted,
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ 
+                padding: '6px 16px', borderRadius: '16px', 
+                backgroundColor: location.pathname === link.path ? `${styles.colors.primary}15` : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                {link.icon}
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 600 }}>{link.label}</span>
+            </button>
+          ))}
+          <button
+              onClick={() => setShowProfile(!showProfile)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'none',
+                border: 'none',
+                color: showProfile ? styles.colors.primary : styles.colors.textMuted,
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ 
+                padding: '6px 16px', borderRadius: '16px', 
+                backgroundColor: showProfile ? `${styles.colors.primary}15` : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <User size={20} />
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 600 }}>Profile</span>
+            </button>
+        </nav>
+      )}
     </div>
   );
 };

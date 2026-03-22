@@ -1,587 +1,206 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import {
-    MapPin,
-    Clock,
-    DollarSign,
-    CheckCircle,
-    XCircle,
-    Truck,
-    User,
-    Navigation,
-    Zap,
-    History,
-    Star as StarIcon,
-    Loader2,
-    X
-} from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { db } from '../../firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs } from 'firebase/firestore';
-import './DriverDashboard.css';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, MapPin, CircleDollarSign, Loader2, ShieldCheck, Tag, ArrowRight, Package, Navigation, PlayCircle, StopCircle, CheckCircle2 } from 'lucide-react';
+import { styles } from '../../utils/styles';
+import api from '../../services/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { io } from 'socket.io-client';
+import { useWindowWidth } from '../../hooks/useWindowWidth';
 
-const MapMover = ({ coords }) => {
-    const map = useMap();
-    useEffect(() => { if (coords) map.setView(coords, 14); }, [coords]);
-    return null;
-};
+const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000", {
+  withCredentials: true
+});
 
-// Sub-component: Dashboard (Requests & Stats)
-const DriverRequests = ({ user }) => {
-    const [isOnline, setIsOnline] = useState(user?.isOnline || false);
-    const [requests, setRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
-    useEffect(() => {
-        // Mock active toggle state
-        setIsOnline(user?.isOnline);
+const DriverDashboard = () => {
+  const [loads, setLoads] = useState([]);
+  const [activeTrips, setActiveTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedLoad, setSelectedLoad] = useState(null);
+  const [bidAmount, setBidAmount] = useState('');
+  const [bidMessage, setBidMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [trackingId, setTrackingId] = useState(null);
+  const { isMobile } = useWindowWidth();
+  
+  const watchIdRef = useRef(null);
 
-        const q = query(
-            collection(db, 'bookings'),
-            where('driverId', '==', user.uid),
-            where('status', '==', 'Requested')
-        );
-        const unsub = onSnapshot(q, (snapshot) => {
-            const reqs = [];
-            snapshot.forEach(doc => reqs.push({ id: doc.id, ...doc.data() }));
-            setRequests(reqs);
-            setLoading(false);
-        });
-        return () => unsub();
-    }, [user.uid, user?.isOnline]);
-    const toggleOnline = async () => {
-        const newStatus = !isOnline;
-        setIsOnline(newStatus);
-        try {
-            await updateDoc(doc(db, 'users', user.uid), { isOnline: newStatus });
-        } catch (err) {
-            console.error(err);
-        }
+  useEffect(() => {
+    fetchData();
+    return () => {
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
     };
-    const handleAccept = async (reqId) => {
-        try {
-            await updateDoc(doc(db, 'bookings', reqId), { status: 'Accepted' });
-            // Should theoretically move to active trips now
-        } catch (e) {
-            console.error(e);
-        }
-    };
-    const handleReject = async (reqId) => {
-        try {
-            await updateDoc(doc(db, 'bookings', reqId), { status: 'Cancelled' });
-        } catch (e) {
-            console.error(e);
-        }
-    };
+  }, []);
 
-    return (
-        <div className="driver-grid">
-            <div className="driver-left">
-                <div className="card status-card animate-slide-up">
-                    <div className="status-header">
-                        <div className="status-info">
-                            <h3 className="card-title">Availability</h3>
-                            <p className={isOnline ? "text-success" : "text-muted"}>
-                                {isOnline ? "You are online and tracking" : "Go online to receive requests"}
-                            </p>
-                        </div>
-                        <div className={`status-toggle ${isOnline ? 'active' : ''}`} onClick={toggleOnline}>
-                            <div className="toggle-thumb"></div>
-                        </div>
-                    </div>
-                </div>
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [loadsRes, tripsRes] = await Promise.all([
+        api.get('/driver/loads/open'),
+        api.get('/trips')
+      ]);
+      setLoads(loadsRes.data);
+      setActiveTrips(tripsRes.data.filter(t => !t.completedAt));
+    } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
 
-                <div className="stats-row mt-6">
-                    <div className="card stat-mini-card animate-slide-up">
-                        <div className="stat-icon earnings"><DollarSign size={20} /></div>
-                        <div className="stat-data">
-                            <span className="stat-label">Earnings</span>
-                            <strong className="stat-value">₹4,250</strong>
-                        </div>
-                    </div>
-                    <div className="card stat-mini-card animate-slide-up">
-                        <div className="stat-icon" style={{ background: '#fefce8', color: '#eab308' }}><StarIcon size={20} className="fill-current" /></div>
-                        <div className="stat-data">
-                            <span className="stat-label">Driver Rating</span>
-                            <strong className="stat-value">{user?.rating || '5.0'} / 5.0</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="booking-requests mt-6">
-                    <div className="section-header">
-                        <h4>Booking Requests</h4>
-                        {requests.length > 0 && <span className="badge-pulsing">{requests.length} Active</span>}
-                    </div>
-
-                    {loading ? (
-                        <div className="flex justify-center p-8"><Loader2 className="animate-spin text-secondary" size={32} /></div>
-                    ) : requests.length === 0 ? (
-                        <div className="card text-center p-8 mt-4 text-muted animate-slide-up">
-                            {isOnline ? "Listening for customer requests..." : "Go online to receive booking requests."}
-                        </div>
-                    ) : (
-                        <div className="request-list">
-                            {requests.map(req => (
-                                <div key={req.id} className="request-card card animate-slide-up">
-                                    <div className="req-header">
-                                        <div className="customer-meta">
-                                            <div className="avatar-sm"><User size={20} /></div>
-                                            <div>
-                                                <h6>{req.customerName}</h6>
-                                                <p>Dist: {req.distance}km • {req.duration}m</p>
-                                            </div>
-                                        </div>
-                                        <div className="req-earnings">₹{(req.distance * 15).toFixed(0)}</div>
-                                    </div>
-                                    <div className="req-route">
-                                        <div className="route-stop">
-                                            <div className="dot blue"></div>
-                                            <span>{req.pickup}</span>
-                                        </div>
-                                        <div className="route-line"></div>
-                                        <div className="route-stop">
-                                            <div className="dot green"></div>
-                                            <span>{req.destination}</span>
-                                        </div>
-                                    </div>
-                                    <div className="req-actions">
-                                        <button className="btn btn-outline-danger" onClick={() => handleReject(req.id)}>Reject</button>
-                                        <button className="btn btn-secondary" onClick={() => handleAccept(req.id)}>Accept Trip</button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="driver-right">
-                <div className="map-view-card card">
-                    <div className="card-header">
-                        <Navigation size={20} className="text-secondary" />
-                        <h3 className="card-title">Live Tracking Area</h3>
-                    </div>
-                    <div className="driver-map-container">
-                        <MapContainer center={[12.9716, 77.5946]} zoom={12} style={{ height: '100%', width: '100%' }}>
-                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
-                            <Marker position={[12.9716, 77.5946]} />
-                        </MapContainer>
-                    </div>
-                    <div className="map-overlay-banner">
-                        {isOnline ? (
-                            <div className="banner-content">
-                                <span className="dot-pulsing"></span>
-                                <strong>System active & visible to customers</strong>
-                            </div>
-                        ) : (
-                            <div className="banner-content offline">
-                                <strong>System Offline</strong>
-                                <span>Switch toggle to start working</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// Sub-component: All Trips
-const DriverTrips = ({ user }) => {
-    const [trips, setTrips] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [ratingModal, setRatingModal] = useState(null);
-    const [ratingScore, setRatingScore] = useState(5);
-    const [ratingComment, setRatingComment] = useState("");
-
-    useEffect(() => {
-        const q = query(collection(db, 'bookings'), where('driverId', '==', user.uid));
-        const unsub = onSnapshot(q, (snapshot) => {
-            const history = [];
-            snapshot.forEach(doc => history.push({ id: doc.id, ...doc.data() }));
-            history.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            setTrips(history);
-            setLoading(false);
-        });
-        return () => unsub();
-    }, [user.uid]);
-
-    const submitRating = async () => {
-        if (!ratingModal) return;
-        try {
-            const ratingId = `rating_d_${ratingModal.id}`;
-            await setDoc(doc(db, 'ratings', ratingId), {
-                tripId: ratingModal.tripId,
-                targetUserId: ratingModal.customerId,
-                fromUserId: user.uid,
-                fromName: user.name || "Driver",
-                score: ratingScore,
-                comment: ratingComment,
-                date: new Date().toISOString()
-            });
-
-            // Mark trip as rated by driver
-            await updateDoc(doc(db, 'bookings', ratingModal.id), { driverRated: true });
-
-            // Update customer's overall rating
-            const customerRatingsQ = query(collection(db, 'ratings'), where('targetUserId', '==', ratingModal.customerId));
-            const snapshot = await getDocs(customerRatingsQ);
-            let total = 0;
-            snapshot.forEach(doc => total += Number(doc.data().score));
-            const avg = snapshot.size > 0 ? (total / snapshot.size).toFixed(1) : ratingScore.toFixed(1);
-            await updateDoc(doc(db, 'users', ratingModal.customerId), { rating: avg });
-
-            setRatingModal(null);
-            setRatingScore(5);
-            setRatingComment("");
-            window.alert("Thank you for your rating!");
-        } catch (e) {
-            console.error(e);
-            window.alert("Failed to submit rating.");
-        }
-    };
-
-    return (
-        <div className="content-pad animate-slide-up">
-            <h3 className="mb-4 text-xl font-bold">Your Assigned Bookings</h3>
-            {loading ? (
-                <div className="flex justify-center p-8"><Loader2 className="animate-spin text-secondary" size={32} /></div>
-            ) : trips.length === 0 ? (
-                <div className="card p-8 text-center text-muted">You have no trips in your history.</div>
-            ) : (
-                <div className="grid gap-4">
-                    {trips.map(trip => (
-                        <div key={trip.id} className="card p-4 flex-row items-center justify-between">
-                            <div>
-                                <h5 className="font-bold text-lg">{trip.tripId}</h5>
-                                <p className="text-muted">{trip.pickup} ➔ {trip.destination}</p>
-                                <p className="text-sm mt-1">Customer: {trip.customerName}</p>
-                            </div>
-                            <div className="text-right">
-                                <span className={`status-badge ${trip.status === 'Completed' ? 'success' : trip.status === 'Cancelled' ? 'danger' : 'warning'}`}>
-                                    {trip.status}
-                                </span>
-                                <p className="font-bold mt-2">₹{(trip.distance * 15).toFixed(0)} • {trip.distance}km</p>
-                                <p className="text-sm text-muted mb-2">{new Date(trip.createdAt).toLocaleDateString()}</p>
-                                {trip.status === 'Completed' && !trip.driverRated && (
-                                    <button className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }} onClick={() => setRatingModal(trip)}>
-                                        Rate Customer
-                                    </button>
-                                )}
-                                {trip.driverRated && (
-                                    <span className="text-xs text-green-600 font-medium flex items-center justify-end"><StarIcon size={12} className="mr-1" /> Rated</span>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {ratingModal && (
-                <div className="modal-overlay">
-                    <div className="booking-modal animate-slide-up" style={{ maxWidth: '400px' }}>
-                        <button className="close-btn" onClick={() => setRatingModal(null)}><X size={20} /></button>
-                        <h3 className="text-xl font-bold mb-4">Rate Customer</h3>
-                        <p className="text-muted mb-4">How was your experience with {ratingModal.customerName}?</p>
-
-                        <div className="flex justify-center mb-6 gap-2">
-                            {[1, 2, 3, 4, 5].map(star => (
-                                <button type="button" key={star} onClick={() => setRatingScore(star)} className="focus:outline-none" style={{ background: 'none', border: 'none', padding: 0 }}>
-                                    <StarIcon
-                                        size={32}
-                                        className={`cursor-pointer ${star <= ratingScore ? 'text-yellow-500 fill-current' : 'text-gray-300'}`}
-                                    />
-                                </button>
-                            ))}
-                        </div>
-
-                        <textarea
-                            className="w-full border rounded p-3 mb-4"
-                            rows="3"
-                            placeholder="Add a comment..."
-                            value={ratingComment}
-                            onChange={(e) => setRatingComment(e.target.value)}
-                        />
-
-                        <button className="btn btn-primary w-full" onClick={submitRating}>
-                            Submit Rating
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// Sub-component: Active Trip View
-const ActiveTrip = ({ user }) => {
-    const [activeTrip, setActiveTrip] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [ratingModal, setRatingModal] = useState(null);
-    const [ratingScore, setRatingScore] = useState(5);
-    const [ratingComment, setRatingComment] = useState("");
-
-    useEffect(() => {
-        const q = query(
-            collection(db, 'bookings'),
-            where('driverId', '==', user.uid),
-            where('status', 'in', ['Accepted', 'In Progress'])
-        );
-        const unsub = onSnapshot(q, (snapshot) => {
-            if (!snapshot.empty) {
-                // Just take the first active one for now
-                setActiveTrip({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
-            } else {
-                setActiveTrip(null);
-            }
-            setLoading(false);
-        });
-        return () => unsub();
-    }, [user.uid]);
-
-    const handleComplete = async () => {
-        if (!activeTrip) return;
-        try {
-            const completedTrip = activeTrip;
-            await updateDoc(doc(db, 'bookings', completedTrip.id), { status: 'Completed' });
-            window.alert("Trip marked as completed!");
-            setRatingModal(completedTrip);
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const submitRating = async () => {
-        if (!ratingModal) return;
-        try {
-            const ratingId = `rating_d_${ratingModal.id}`;
-            await setDoc(doc(db, 'ratings', ratingId), {
-                tripId: ratingModal.tripId,
-                targetUserId: ratingModal.customerId,
-                fromUserId: user.uid,
-                fromName: user.name || "Driver",
-                score: ratingScore,
-                comment: ratingComment,
-                date: new Date().toISOString()
-            });
-
-            // Mark trip as rated by driver
-            await updateDoc(doc(db, 'bookings', ratingModal.id), { driverRated: true });
-
-            // Update customer's overall rating
-            const customerRatingsQ = query(collection(db, 'ratings'), where('targetUserId', '==', ratingModal.customerId));
-            const snapshot = await getDocs(customerRatingsQ);
-            let total = 0;
-            snapshot.forEach(doc => total += Number(doc.data().score));
-            const avg = snapshot.size > 0 ? (total / snapshot.size).toFixed(1) : ratingScore.toFixed(1);
-            await updateDoc(doc(db, 'users', ratingModal.customerId), { rating: avg });
-
-            setRatingModal(null);
-            setRatingScore(5);
-            setRatingComment("");
-            window.alert("Thank you for your rating!");
-        } catch (e) {
-            console.error(e);
-            window.alert("Failed to submit rating.");
-        }
-    };
-
-    const handleStart = async () => {
-        if (!activeTrip) return;
-        try {
-            await updateDoc(doc(db, 'bookings', activeTrip.id), { status: 'In Progress' });
-        } catch (e) {
-            console.error(e);
-        }
+  const startLiveTracking = (trip) => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
     }
+    setTrackingId(trip.id);
+    socket.emit('joinTrip', trip.id);
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        socket.emit('updateLocation', { tripId: trip.id, lat: latitude, lng: longitude });
+      },
+      (error) => {
+        console.error("GPS Error:", error);
+        stopTracking();
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
-    if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin text-secondary" size={32} /></div>;
-
-    if (!activeTrip && !ratingModal) {
-        return (
-            <div className="content-pad animate-slide-up text-center pt-20">
-                <Truck size={64} className="mx-auto text-muted mb-4 opacity-50" />
-                <h3 className="text-xl font-bold mb-2">No Active Trip</h3>
-                <p className="text-muted">You do not have any trips currently in progress or accepted.</p>
-            </div>
-        );
+  const stopTracking = () => {
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
     }
+    setTrackingId(null);
+  };
 
-    return (
-        <div className="dashboard-grid animate-slide-up relative">
-            {!activeTrip && ratingModal && (
-                <div className="content-pad text-center pt-20 w-full col-span-2">
-                    <Truck size={64} className="mx-auto text-muted mb-4 opacity-50" />
-                    <h3 className="text-xl font-bold mb-2">No Active Trip</h3>
-                    <p className="text-muted">You do not have any trips currently in progress or accepted.</p>
-                </div>
-            )}
+  const handleSubmitBid = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api.post(`/driver/loads/${selectedLoad.id}/bid`, {
+        amount: bidAmount,
+        message: bidMessage
+      });
+      alert('Offer submitted successfully!');
+      setSelectedLoad(null);
+      setBidAmount('');
+      setBidMessage('');
+      fetchData();
+    } catch (e) {
+      alert(e.response?.data?.error || 'Failed to submit quote');
+    } finally { setSubmitting(false); }
+  };
 
-            {activeTrip && (
-                <>
-                    <div className="driver-left">
-                        <div className="card">
-                            <div className="card-header border-b pb-4 mb-4">
-                                <Truck size={24} className="text-secondary" />
-                                <h3 className="card-title text-xl">Current Mission</h3>
-                                <span className={`status-badge ${activeTrip.status === 'In Progress' ? 'success' : 'warning'} ml-auto`}>
-                                    {activeTrip.status.toUpperCase()}
-                                </span>
-                            </div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '24px' : '40px' }}>
+      
+      {activeTrips.length > 0 && (
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <div style={{ backgroundColor: `${styles.colors.success}10`, padding: '6px', borderRadius: '10px' }}><Navigation size={20} color={styles.colors.success} /></div>
+            <h2 style={{ fontSize: isMobile ? '18px' : '22px', fontWeight: 700, margin: 0 }}>Active Jobs</h2>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
+            {activeTrips.map(trip => (
+              <div key={trip.id} style={{ ...styles.common.card, borderTop: `4px solid ${trackingId === trip.id ? styles.colors.primary : styles.colors.success}` }}>
+                <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '8px' }}>{trip.post.origin.split(',')[0]} &rarr; {trip.post.destination.split(',')[0]}</div>
+                <div style={{ fontSize: '12px', color: styles.colors.textMuted, marginBottom: '20px' }}>ID: {trip.id.slice(0,8)}</div>
+                
+                <button 
+                  onClick={() => trackingId === trip.id ? stopTracking() : startLiveTracking(trip)}
+                  style={{ ...styles.common.buttonPrimary, backgroundColor: trackingId === trip.id ? styles.colors.danger : styles.colors.success, width: '100%' }}
+                >
+                  {trackingId === trip.id ? <StopCircle size={18} /> : <PlayCircle size={18} />}
+                  {trackingId === trip.id ? 'Stop Tracking' : 'Start Live GPS'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
-                            <div className="mb-6">
-                                <h5 className="text-sm text-muted uppercase tracking-wider mb-2">Customer Details</h5>
-                                <p className="font-bold text-lg">{activeTrip.customerName}</p>
-                            </div>
-
-                            <div className="req-route mb-8 bg-gray-50 p-4 rounded-lg">
-                                <div className="route-stop">
-                                    <div className="dot blue"></div>
-                                    <span className="font-medium">{activeTrip.pickup}</span>
-                                </div>
-                                <div className="route-line" style={{ height: '30px' }}></div>
-                                <div className="route-stop">
-                                    <div className="dot green"></div>
-                                    <span className="font-medium">{activeTrip.destination}</span>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-8">
-                                <div className="p-3 bg-gray-50 rounded-lg text-center">
-                                    <span className="text-muted text-sm block mb-1">Distance</span>
-                                    <span className="font-bold text-lg">{activeTrip.distance} km</span>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg text-center">
-                                    <span className="text-muted text-sm block mb-1">Estimated Fare</span>
-                                    <span className="font-bold text-lg text-green-600">₹{(activeTrip.distance * 15).toFixed(0)}</span>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4">
-                                {activeTrip.status === 'Accepted' && (
-                                    <button className="btn btn-secondary w-full" onClick={handleStart}>
-                                        Start Trip
-                                    </button>
-                                )}
-                                {activeTrip.status === 'In Progress' && (
-                                    <button className="btn btn-primary w-full" onClick={handleComplete}>
-                                        <CheckCircle size={18} /> Mark as Completed
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="driver-right">
-                        <div className="map-view-card card" style={{ height: 'calc(100vh - 120px)' }}>
-                            <MapContainer center={[12.9716, 77.5946]} zoom={14} style={{ height: '100%', width: '100%' }}>
-                                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                <Marker position={[12.9716, 77.5946]}>
-                                    <Popup>Your Location</Popup>
-                                </Marker>
-                            </MapContainer>
-                        </div>
-                    </div>
-                </>
-            )
-            }
-
-            {
-                ratingModal && (
-                    <div className="modal-overlay">
-                        <div className="booking-modal animate-slide-up" style={{ maxWidth: '400px' }}>
-                            <button className="close-btn" onClick={() => setRatingModal(null)}><X size={20} /></button>
-                            <h3 className="text-xl font-bold mb-4">Rate Customer</h3>
-                            <p className="text-muted mb-4">How was your experience with {ratingModal.customerName}?</p>
-
-                            <div className="flex flex-row justify-center items-center mb-6 gap-2">
-                                {[1, 2, 3, 4, 5].map(star => (
-                                    <div
-                                        key={star}
-                                        onClick={() => setRatingScore(star)}
-                                        className="cursor-pointer p-1 transition-transform hover:scale-110 flex-shrink-0"
-                                    >
-                                        <StarIcon
-                                            size={32}
-                                            fill={star <= ratingScore ? "currentColor" : "none"}
-                                            className={`pointer-events-none ${star <= ratingScore ? 'text-yellow-500' : 'text-gray-300'}`}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-
-                            <textarea
-                                className="w-full border rounded p-3 mb-4"
-                                rows="3"
-                                placeholder="Add a comment..."
-                                value={ratingComment}
-                                onChange={(e) => setRatingComment(e.target.value)}
-                            />
-
-                            <button className="btn btn-primary w-full" onClick={submitRating}>
-                                Submit Rating
-                            </button>
-                        </div>
-                    </div>
-                )
-            }
-        </div >
-    );
-};
-
-// Ratings Sub-Component
-const DriverRatings = ({ user }) => {
-    const [ratings, setRatings] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const q = query(collection(db, 'ratings'), where('targetUserId', '==', user.uid));
-        const unsub = onSnapshot(q, (snapshot) => {
-            const data = [];
-            snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
-            data.sort((a, b) => new Date(b.date) - new Date(a.date));
-            setRatings(data);
-            setLoading(false);
-        });
-        return () => unsub();
-    }, [user.uid]);
-
-    return (
-        <div className="content-pad animate-slide-up">
-            <h3 className="mb-4 text-xl font-bold">Ratings Received</h3>
-            {loading ? (
-                <div className="flex justify-center p-8"><Loader2 className="animate-spin text-secondary" size={32} /></div>
-            ) : ratings.length === 0 ? (
-                <div className="card p-8 text-center text-muted">You have no ratings yet.</div>
-            ) : (
-                <div className="grid gap-4">
-                    {ratings.map(r => (
-                        <div key={r.id} className="card p-4">
-                            <div className="flex justify-between items-center mb-2">
-                                <strong>{r.fromName}</strong>
-                                <span className="flex items-center text-yellow-500"><StarIcon size={16} fill="currentColor" className="mr-1" />{r.score}</span>
-                            </div>
-                            <p className="text-muted">{r.comment}</p>
-                            <span className="text-xs text-light mt-2 block">{new Date(r.date).toLocaleDateString()}</span>
-                        </div>
-                    ))}
-                </div>
-            )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 700, margin: 0 }}>Marketplace</h2>
+          <p style={{ color: styles.colors.textMuted, marginTop: '4px', fontSize: '13px' }}>Find profitable routes.</p>
         </div>
-    );
-};
+      </div>
 
-// Main DriverDashboard Router
-const DriverDashboard = ({ user }) => {
-    return (
-        <Routes>
-            <Route path="dashboard" element={<DriverRequests user={user} />} />
-            <Route path="trips" element={<DriverTrips user={user} />} />
-            <Route path="active" element={<ActiveTrip user={user} />} />
-            <Route path="ratings" element={<DriverRatings user={user} />} />
-            <Route path="*" element={<Navigate to="dashboard" replace />} />
-        </Routes>
-    );
+      <div style={{ display: 'grid', gridTemplateColumns: (selectedLoad && !isMobile) ? '1.4fr 1.1fr' : '1fr', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {loading ? (
+             <div style={{ textAlign: 'center', padding: '60px' }}><Loader2 className="animate-spin" size={32} color={styles.colors.primary} /></div>
+          ) : loads.length === 0 ? (
+            <div style={{ ...styles.common.card, textAlign: 'center', padding: '60px' }}>
+               <Package size={32} color={styles.colors.border} style={{ marginBottom: '16px' }} />
+               <p style={{ color: styles.colors.textMuted }}>No shipments available.</p>
+            </div>
+          ) : (
+            loads.map(load => (
+              <motion.div 
+                key={load.id} 
+                layout
+                onClick={() => setSelectedLoad(load)}
+                style={{ 
+                  ...styles.common.card, 
+                  cursor: 'pointer',
+                  border: selectedLoad?.id === load.id ? `2px solid ${styles.colors.primary}` : '1px solid #F1F5F9'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ fontWeight: 700, color: styles.colors.primary, fontSize: '11px', textTransform: 'uppercase' }}>{load.customer.name}</div>
+                  <span style={{ fontSize: '12px', color: styles.colors.textMuted }}>{new Date(load.createdAt).toLocaleDateString()}</span>
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                     <div style={{ fontSize: '10px', color: styles.colors.textMuted }}>ORIGIN</div>
+                     <div style={{ fontWeight: 700, fontSize: '14px' }}>{load.origin.split(',')[0]}</div>
+                  </div>
+                  <ArrowRight size={16} color={styles.colors.border} />
+                  <div style={{ flex: 1 }}>
+                     <div style={{ fontSize: '10px', color: styles.colors.textMuted }}>DESTINATION</div>
+                     <div style={{ fontWeight: 700, fontSize: '14px' }}>{load.destination.split(',')[0]}</div>
+                  </div>
+                </div>
+              </motion.div>
+            ))
+          )}
+        </div>
+
+        <AnimatePresence>
+          {selectedLoad && (
+            <motion.div 
+               initial={isMobile ? { y: 300 } : { opacity: 0, x: 20 }}
+               animate={isMobile ? { y: 0 } : { opacity: 1, x: 0 }}
+               exit={isMobile ? { y: 300 } : { opacity: 0, x: 20 }}
+               style={isMobile ? {
+                 position: 'fixed', bottom: 84, left: 16, right: 16, backgroundColor: 'white', 
+                 borderRadius: '24px', padding: '24px', boxShadow: '0 -10px 40px rgba(0,0,0,0.1)', 
+                 zIndex: 1002, border: `1px solid ${styles.colors.border}`, maxHeight: '60vh', overflowY: 'auto'
+               } : { ...styles.common.card, alignSelf: 'start', position: 'sticky', top: '96px' }}
+            >
+               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Place Offer</h3>
+                 <button onClick={() => setSelectedLoad(null)} style={{ background: 'none', border: 'none', color: styles.colors.primary, fontWeight: 600 }}>Close</button>
+               </div>
+               
+               <div style={{ backgroundColor: styles.colors.background, padding: '12px', borderRadius: '12px', border: `1px solid ${styles.colors.border}`, marginBottom: '20px' }}>
+                  <div style={{ fontWeight: 700, fontSize: '14px' }}>{selectedLoad.origin.split(',')[0]} &rarr; {selectedLoad.destination.split(',')[0]}</div>
+               </div>
+
+               <form onSubmit={handleSubmitBid}>
+                  <label style={styles.common.label}>Price ($)</label>
+                  <input type="number" style={{ ...styles.common.input, fontSize: '20px', fontWeight: 700 }} placeholder="0.00" value={bidAmount} onChange={e => setBidAmount(e.target.value)} required />
+                  <label style={{ ...styles.common.label, marginTop: '16px' }}>Message</label>
+                  <textarea style={{ ...styles.common.input, minHeight: '80px', resize: 'none' }} placeholder="Why you?" value={bidMessage} onChange={e => setBidMessage(e.target.value)} />
+                  <button type="submit" disabled={submitting} style={{ ...styles.common.buttonPrimary, width: '100%', height: '48px', marginTop: '16px' }}>
+                    {submitting ? <Loader2 className="animate-spin" /> : 'Confirm Offer'}
+                  </button>
+               </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
 };
 
 export default DriverDashboard;
