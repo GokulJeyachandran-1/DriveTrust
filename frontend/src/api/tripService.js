@@ -5,7 +5,17 @@ export const getTrips = async () => {
     return res.data;
 };
 
-export const updateTripStatus = async (id, status) => {
-    const res = await api.patch(`/trips/${id}/status`, { status });
+export const updateTripStatus = async (id, status, location) => {
+    const res = await api.put(`/trips/${id}/status`, { status, location });
+    return res.data;
+};
+
+export const submitReview = async (reviewData) => {
+    const res = await api.post('/reviews', reviewData);
+    return res.data;
+};
+
+export const triggerSOS = async (tripId) => {
+    const res = await api.post('/sos/raise', { tripId });
     return res.data;
 };

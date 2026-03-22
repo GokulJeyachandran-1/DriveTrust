@@ -7,7 +7,7 @@ exports.getOpenLoads = async (req, res) => {
       where: { status: 'OPEN' },
       include: {
         customer: {
-          select: { name: true, isKycVerified: true }
+          select: { id: true, name: true, isKycVerified: true, reviewsReceived: { select: { rating: true } } }
         }
       },
       orderBy: { createdAt: 'desc' }

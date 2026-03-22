@@ -104,7 +104,10 @@ exports.refreshToken = async (req, res) => {
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
-      res.json({ access_token });
+      res.json({
+        access_token,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role, isKycVerified: user.isKycVerified }
+      });
     });
   } catch (error) {
     console.error('Refresh Token Error:', error);

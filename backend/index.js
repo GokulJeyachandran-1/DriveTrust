@@ -11,6 +11,9 @@ const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const driverRoutes = require('./routes/driverRoutes');
 const tripRoutes = require('./routes/tripRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const sosRoutes = require('./routes/sosRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,7 +21,7 @@ const server = http.createServer(app);
 // Socket.io for Live Tracking
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: ["http://localhost:5173", "http://localhost:5174", process.env.FRONTEND_URL],
     credentials: true,
   }
 });
@@ -27,13 +30,13 @@ app.set('io', io);
 // Security Middlewares
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: ["http://localhost:5173", "http://localhost:5174", process.env.FRONTEND_URL],
   credentials: true
 }));
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, 
+  max: 500 // Increased limit, rebooting server cleanses IPs
 });
 app.use('/api/', limiter);
 
@@ -46,6 +49,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/trips', tripRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/sos', sosRoutes);
+app.use('/api/users', userRoutes);
 
 // Socket.IO Connection Handler
 io.on('connection', (socket) => {

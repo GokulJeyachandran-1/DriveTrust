@@ -53,7 +53,7 @@ exports.getBidsForLoad = async (req, res) => {
       where: { postId: id },
       include: {
         driver: {
-          select: { id: true, name: true, isKycVerified: true }
+          select: { id: true, name: true, isKycVerified: true, reviewsReceived: { select: { rating: true } } }
         }
       },
       orderBy: { amount: 'asc' }

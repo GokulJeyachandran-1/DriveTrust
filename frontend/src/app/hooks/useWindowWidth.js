@@ -6,13 +6,19 @@ export const useWindowWidth = () => {
   useEffect(() => {
     const handleResize = () => setWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
+    
+    // Cleanup on unmount
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  return width;
+};
+
+export const useDeviceType = () => {
+  const width = useWindowWidth();
   return {
-    width,
     isMobile: width < 768,
     isTablet: width >= 768 && width < 1024,
-    isDesktop: width >= 1024,
+    isDesktop: width >= 1024
   };
 };

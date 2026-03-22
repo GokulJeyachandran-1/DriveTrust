@@ -5,32 +5,43 @@ const api = axios.create({
   withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
+export const setAuthToken = (token) => {
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common['Authorization'];
   }
-  return config;
-}, (error) => Promise.reject(error));
+};
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+
+    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh' && originalRequest.url !== '/auth/login') {
       originalRequest._retry = true;
       try {
-        const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/refresh`, {}, { withCredentials: true });
+        // Use default axios to prevent infinite interceptor loops!
+        const res = await axios.post(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
+        
         if (res.status === 200) {
-          localStorage.setItem('access_token', res.data.access_token);
-          api.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`;
+          const { access_token } = res.data;
+          setAuthToken(access_token);
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return api(originalRequest);
         }
       } catch (err) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        setAuthToken(null);
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+           window.location.href = '/login';
+        }
       }
+    } else if (error.response?.data?.error) {
+      window.dispatchEvent(new CustomEvent('api-error', { detail: error.response.data.error }));
     }
     return Promise.reject(error);
   }

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Star, X, MessageSquare, ShieldCheck } from 'lucide-react';
-import './RatingModal.css';
 
 const RatingModal = ({ isOpen, onClose, driverName, onRatingComplete }) => {
     const [rating, setRating] = useState(0);

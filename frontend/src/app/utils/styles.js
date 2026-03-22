@@ -1,0 +1,75 @@
+export const styles = {
+  colors: {
+    primary: '#2563EB',
+    primaryDark: '#1E40AF',
+    secondary: '#64748B',
+    success: '#10B981',
+    danger: '#EF4444',
+    background: '#F1F5F9',
+    surface: '#FFFFFF',
+    textMain: '#0F172A',
+    textLight: '#94A3B8',
+    border: '#E2E8F0',
+  },
+  typography: {
+    fontFamily: '"Roboto", "Segoe UI", sans-serif',
+    titleWeight: 800,
+    buttonWeight: 600,
+  },
+  common: {
+    pageContainer: {
+      minHeight: '100vh',
+      width: '100%',
+      backgroundColor: '#F1F5F9',
+      fontFamily: '"Roboto", "Segoe UI", sans-serif',
+      color: '#0F172A',
+      display: 'flex',
+      flexDirection: 'column',
+      boxSizing: 'border-box',
+      overflowX: 'hidden'
+    },
+    card: {
+      backgroundColor: '#FFFFFF',
+      border: '1px solid #E2E8F0',
+      borderRadius: '16px',
+      padding: '24px',
+      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+      boxSizing: 'border-box',
+    },
+    buttonPrimary: {
+      backgroundColor: '#2563EB',
+      color: '#FFFFFF',
+      border: 'none',
+      borderRadius: '12px',
+      padding: '12px 24px',
+      fontWeight: 600,
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'background-color 0.2s',
+      boxSizing: 'border-box',
+    },
+    input: {
+      width: '100%',
+      padding: '12px 16px',
+      borderRadius: '12px',
+      border: '1px solid #E2E8F0',
+      outline: 'none',
+      fontSize: '15px',
+      color: '#0F172A',
+      backgroundColor: '#FFFFFF',
+      boxSizing: 'border-box',
+      fontFamily: '"Inter", sans-serif',
+    },
+    label: {
+      display: 'block',
+      fontSize: '11px',
+      textTransform: 'uppercase',
+      color: '#94A3B8',
+      fontWeight: 700,
+      marginBottom: '8px',
+      letterSpacing: '0.05em'
+    }
+  }
+};

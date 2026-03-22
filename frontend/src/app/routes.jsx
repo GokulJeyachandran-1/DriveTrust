@@ -2,7 +2,6 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedLayout from '../auth/ProtectedLayout';
 
-// Pages - updated paths
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
 import CustomerDashboard from './pages/Customer/CustomerDashboard';
@@ -18,20 +17,17 @@ const AppRoutes = () => {
       {/* Customer Routes */}
       <Route element={<ProtectedLayout allowedRoles={['CUSTOMER']} />}>
         <Route path="/customer" element={<CustomerDashboard />} />
+        <Route path="/customer/trips" element={<TripsDashboard />} />
       </Route>
 
       {/* Driver Routes */}
       <Route element={<ProtectedLayout allowedRoles={['DRIVER']} />}>
         <Route path="/driver" element={<DriverDashboard />} />
-      </Route>
-
-      {/* Shared Protected Routes */}
-      <Route element={<ProtectedLayout />}>
-        <Route path="/trips" element={<TripsDashboard />} />
+        <Route path="/driver/trips" element={<TripsDashboard />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<div>404 - Not Found</div>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
