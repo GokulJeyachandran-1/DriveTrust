@@ -52,6 +52,7 @@ const TripDetailsModal = ({ trip, onClose, socket, user }) => {
   const [address, setAddress] = useState('Locating...');
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [isSosActive, setIsSosActive] = useState(false);
+  const [confirmSos, setConfirmSos] = useState(false);
   
   // Rating State
   const [rating, setRating] = useState(5);
@@ -97,8 +98,9 @@ const TripDetailsModal = ({ trip, onClose, socket, user }) => {
   }, [trip, socket]);
 
   const handleSOS = async () => {
-    if (window.confirm("Are you sure you want to trigger an Emergency SOS?")) {
+    if (confirmSos) {
       setIsSosActive(true);
+      setConfirmSos(false);
       try {
         await triggerSOS(trip.id);
         toast('🚨 SOS Alert Dispatched! Admin tracking initiated.', 'success');
@@ -106,6 +108,10 @@ const TripDetailsModal = ({ trip, onClose, socket, user }) => {
         toast('Failed to trigger SOS', 'error');
         setIsSosActive(false);
       }
+    } else {
+      setConfirmSos(true);
+      toast('Tap SOS again to confirm Emergency Alert', 'info');
+      setTimeout(() => setConfirmSos(false), 4000);
     }
   };
 

@@ -14,6 +14,8 @@ const tripRoutes = require('./routes/tripRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const sosRoutes = require('./routes/sosRoutes');
 const userRoutes = require('./routes/userRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +45,7 @@ app.use('/api/', limiter);
 // Built-in Middlewares
 app.use(express.json());
 app.use(cookieParser());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -52,6 +55,7 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/sos', sosRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Socket.IO Connection Handler
 io.on('connection', (socket) => {

@@ -19,6 +19,7 @@ const DriverDashboard = () => {
   const [bidMessage, setBidMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isSosActive, setIsSosActive] = useState({});
+  const [confirmDeliver, setConfirmDeliver] = useState(null);
   const [profileUserId, setProfileUserId] = useState(null);
   const [trackingId, setTrackingId] = useState(null);
   const width = useWindowWidth();
@@ -39,7 +40,8 @@ const DriverDashboard = () => {
 
     fetchData();
     return () => {
-      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+      // Only disconnect socket on unmount, NOT the GPS tracking
+      // GPS watch is cleared only when user explicitly clicks Stop
       if (socketRef.current) socketRef.current.disconnect();
     };
   }, []);
@@ -90,14 +92,13 @@ const DriverDashboard = () => {
   };
 
   const handleSOS = async (tripId) => {
-    if (window.confirm("Are you sure you want to trigger an Emergency SOS?")) {
-      setIsSosActive(prev => ({...prev, [tripId]: true}));
-      try {
-        await triggerSOS(tripId);
-        toast('🚨 SOS Alert Dispatched! Admin is tracking you.', 'success');
-      } catch (e) {
-        setIsSosActive(prev => ({...prev, [tripId]: false}));
-      }
+    setIsSosActive(prev => ({...prev, [tripId]: true}));
+    try {
+      await triggerSOS(tripId);
+      toast('🚨 SOS Alert Dispatched! Admin is tracking you.', 'success');
+    } catch (e) {
+      setIsSosActive(prev => ({...prev, [tripId]: false}));
+      toast('Failed to send SOS', 'error');
     }
   };
 
@@ -184,9 +185,17 @@ const DriverDashboard = () => {
                     <motion.button 
                       whileTap={{ scale: 0.96 }}
                       onClick={async () => {
-                        if (confirm('Mark this trip as delivered?')) {
-                          await updateTripStatus(trip.id, 'DELIVERED');
-                          fetchData();
+                        if (confirmDeliver === trip.id) {
+                          try {
+                            await updateTripStatus(trip.id, 'DELIVERED');
+                            toast('Trip marked as delivered!', 'success');
+                            fetchData();
+                          } catch (e) { toast('Failed to update status', 'error'); }
+                          setConfirmDeliver(null);
+                        } else {
+                          setConfirmDeliver(trip.id);
+                          toast('Tap Deliver again to confirm', 'info');
+                          setTimeout(() => setConfirmDeliver(null), 4000);
                         }
                       }}
                       style={{ 

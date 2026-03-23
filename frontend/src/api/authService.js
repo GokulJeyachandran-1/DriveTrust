@@ -5,8 +5,11 @@ export const login = async (email, password) => {
   return res.data;
 };
 
-export const signup = async (userData) => {
-  const res = await api.post('/auth/signup', userData);
+export const signup = async (formData) => {
+  // formData is a FormData instance with files
+  const res = await api.post('/auth/signup', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
   return res.data;
 };
 

@@ -6,6 +6,7 @@ import { useAuth } from '../../../auth/auth';
 import { motion } from 'framer-motion';
 import { Loader2, MapPin } from 'lucide-react';
 import { useWindowWidth } from '../../hooks/useWindowWidth';
+import { useToast } from '../../hooks/useToast';
 
 const Login = () => {
     const [loading, setLoading] = useState(false);
@@ -14,6 +15,7 @@ const Login = () => {
     const navigate = useNavigate();
     const width = useWindowWidth();
     const isMobile = width < 768;
+    const toast = useToast();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -21,10 +23,11 @@ const Login = () => {
         try {
             const data = await apiLogin(formData.email, formData.password);
             login(data.user, data.access_token);
-            if (data.user.role === 'CUSTOMER') navigate('/customer');
+            if (data.user.role === 'ADMIN') navigate('/admin');
+            else if (data.user.role === 'CUSTOMER') navigate('/customer');
             else navigate('/driver');
         } catch (error) {
-            alert(error.response?.data?.error || 'Login failed');
+            toast(error.response?.data?.error || 'Login failed', 'error');
         } finally { setLoading(false); }
     };
 

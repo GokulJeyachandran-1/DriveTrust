@@ -14,6 +14,11 @@ const ProtectedLayout = ({ allowedRoles }) => {
     return <Navigate to="/" replace />;
   }
 
+  // Admin has its own layout, skip DashboardLayout
+  if (user.role === 'ADMIN') {
+    return <Outlet />;
+  }
+
   return (
     <DashboardLayout user={user} onLogout={logout}>
       <Outlet />

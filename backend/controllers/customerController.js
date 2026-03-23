@@ -110,7 +110,21 @@ exports.acceptBidAndBook = async (req, res) => {
         data: {
           postId,
           driverId: bid.driverId,
-          currentLocation: loadPost.origin // Init location to origin
+          currentLocation: loadPost.origin
+        }
+      });
+
+      // 5. Create Payment (10% platform fee)
+      const platformFee = bid.amount * 0.10;
+      const driverPayout = bid.amount - platformFee;
+      await tx.payment.create({
+        data: {
+          bidId: bid.id,
+          amount: bid.amount,
+          platformFee,
+          driverPayout,
+          status: 'COLLECTED',
+          collectedAt: new Date()
         }
       });
     });

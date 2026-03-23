@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   CUSTOMER
   DRIVER
+  ADMIN
 }
 
 enum LoadStatus {
@@ -31,6 +32,29 @@ enum EscrowStatus {
   RELEASED
 }
 
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DocType {
+  AADHAAR
+  DRIVING_LICENSE
+}
+
+enum PaymentStatus {
+  PENDING
+  COLLECTED
+  RELEASED
+  DISPUTED
+}
+
+enum SosStatus {
+  OPEN
+  RESOLVED
+}
+
 model User {
   id            String     @id @default(uuid())
   name          String
@@ -38,18 +62,32 @@ model User {
   passwordHash  String
   role          Role
   isKycVerified Boolean    @default(false)
+  kycStatus     KycStatus  @default(PENDING)
+  aadhaarNumber String    @unique
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  // Relationships
-  loadPosts     LoadPost[] @relation("CustomerLoads")
-  bids          Bid[]      @relation("DriverBids")
-  trips         Trip[]     @relation("DriverTrips")
-  reviewsGiven    Review[]   @relation("ReviewsGiven")
-  reviewsReceived Review[]   @relation("ReviewsReceived")
-  sosAlerts       SosAlert[] @relation("SosAlerts")
+  loadPosts       LoadPost[]    @relation("CustomerLoads")
+  bids            Bid[]         @relation("DriverBids")
+  trips           Trip[]        @relation("DriverTrips")
+  reviewsGiven    Review[]      @relation("ReviewsGiven")
+  reviewsReceived Review[]      @relation("ReviewsReceived")
+  sosAlerts       SosAlert[]    @relation("SosAlerts")
+  kycDocuments    KycDocument[] @relation("UserKycDocs")
 
   @@map("users")
+}
+
+model KycDocument {
+  id           String   @id @default(uuid())
+  userId       String
+  documentType DocType
+  filePath     String
+  uploadedAt   DateTime @default(now())
+
+  user         User     @relation("UserKycDocs", fields: [userId], references: [id])
+
+  @@map("kyc_documents")
 }
 
 model LoadPost {
@@ -63,7 +101,6 @@ model LoadPost {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
-  // Relationships
   customer          User       @relation("CustomerLoads", fields: [customerId], references: [id])
   bids              Bid[]
   trip              Trip?
@@ -82,9 +119,9 @@ model Bid {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  // Relationships
   post         LoadPost     @relation(fields: [postId], references: [id])
   driver       User         @relation("DriverBids", fields: [driverId], references: [id])
+  payment      Payment?
 
   @@map("bids")
 }
@@ -93,13 +130,12 @@ model Trip {
   id              String    @id @default(uuid())
   postId          String    @unique
   driverId        String
-  currentLocation String?   
+  currentLocation String?
   startedAt       DateTime  @default(now())
   completedAt     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  // Relationships
   post            LoadPost  @relation(fields: [postId], references: [id])
   driver          User      @relation("DriverTrips", fields: [driverId], references: [id])
   reviews         Review[]
@@ -115,9 +151,9 @@ model Review {
   revieweeId      String
   rating          Int
   comment         String?  @db.Text
-  speedScore      Int?     
-  handlingScore   Int?     
-  routeScore      Int?     
+  speedScore      Int?
+  handlingScore   Int?
+  routeScore      Int?
   createdAt       DateTime @default(now())
 
   trip            Trip     @relation(fields: [tripId], references: [id])
@@ -126,11 +162,6 @@ model Review {
 
   @@unique([tripId, reviewerId])
   @@map("reviews")
-}
-
-enum SosStatus {
-  OPEN
-  RESOLVED
 }
 
 model SosAlert {
@@ -145,4 +176,21 @@ model SosAlert {
   raisedBy        User      @relation("SosAlerts", fields: [raisedById], references: [id])
 
   @@map("sos_alerts")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  bidId         String        @unique
+  amount        Float
+  platformFee   Float
+  driverPayout  Float
+  status        PaymentStatus @default(PENDING)
+  collectedAt   DateTime?
+  releasedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  bid           Bid           @relation(fields: [bidId], references: [id])
+
+  @@map("payments")
 }

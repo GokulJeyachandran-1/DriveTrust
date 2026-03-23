@@ -13,6 +13,9 @@ export const setAuthToken = (token) => {
   }
 };
 
+let isRefreshing = false;
+let refreshPromise = null;
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -20,13 +23,18 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh' && originalRequest.url !== '/auth/login') {
       originalRequest._retry = true;
+
       try {
-        // Use default axios to prevent infinite interceptor loops!
-        const res = await axios.post(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
+        if (!isRefreshing) {
+          isRefreshing = true;
+          refreshPromise = axios.post(
+            `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh`,
+            {},
+            { withCredentials: true }
+          );
+        }
+
+        const res = await refreshPromise;
         
         if (res.status === 200) {
           const { access_token } = res.data;
@@ -39,8 +47,11 @@ api.interceptors.response.use(
         if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
            window.location.href = '/login';
         }
+      } finally {
+        isRefreshing = false;
+        refreshPromise = null;
       }
-    } else if (error.response?.data?.error) {
+    } else if (error.response?.data?.error && originalRequest.url !== '/auth/refresh' && originalRequest.url !== '/auth/login') {
       window.dispatchEvent(new CustomEvent('api-error', { detail: error.response.data.error }));
     }
     return Promise.reject(error);

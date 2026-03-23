@@ -1,8 +1,25 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const prisma = new PrismaClient();
+
+// Multer config
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+exports.uploadMiddleware = upload.fields([
+  { name: 'aadhaarDoc', maxCount: 1 },
+  { name: 'drivingLicenseDoc', maxCount: 1 }
+]);
 
 const generateTokens = (user) => {
   const access_token = jwt.sign(
@@ -20,9 +37,18 @@ const generateTokens = (user) => {
 
 exports.signup = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, aadhaarNumber } = req.body;
     if (!name || !email || !password || !role) {
       return res.status(400).json({ error: 'All fields are required' });
+    }
+    if (!aadhaarNumber) {
+      return res.status(400).json({ error: 'Aadhaar number is required' });
+    }
+    if (!req.files?.aadhaarDoc) {
+      return res.status(400).json({ error: 'Aadhaar card document is required' });
+    }
+    if (role === 'DRIVER' && !req.files?.drivingLicenseDoc) {
+      return res.status(400).json({ error: 'Driving License document is required for drivers' });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -30,16 +56,30 @@ exports.signup = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { name, email, passwordHash, role }
+      data: { name, email, passwordHash, role, aadhaarNumber: aadhaarNumber || null }
     });
 
+    // Save KYC documents if uploaded
+    if (req.files) {
+      if (req.files.aadhaarDoc) {
+        await prisma.kycDocument.create({
+          data: { userId: user.id, documentType: 'AADHAAR', filePath: `/uploads/${req.files.aadhaarDoc[0].filename}` }
+        });
+      }
+      if (req.files.drivingLicenseDoc) {
+        await prisma.kycDocument.create({
+          data: { userId: user.id, documentType: 'DRIVING_LICENSE', filePath: `/uploads/${req.files.drivingLicenseDoc[0].filename}` }
+        });
+      }
+    }
+
     const { access_token, refresh_token } = generateTokens(user);
-    
+
     res.cookie('refresh_token', refresh_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
     res.status(201).json({
@@ -63,6 +103,16 @@ exports.login = async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // Block non-admin users who aren't KYC approved
+    if (user.role !== 'ADMIN') {
+      if (user.kycStatus === 'PENDING') {
+        return res.status(403).json({ error: 'Your account is pending KYC verification. Please wait for admin approval.' });
+      }
+      if (user.kycStatus === 'REJECTED') {
+        return res.status(403).json({ error: 'Your KYC was rejected. Please contact support or re-register with valid documents.' });
+      }
+    }
 
     const { access_token, refresh_token } = generateTokens(user);
 

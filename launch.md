@@ -9,6 +9,7 @@ Ensure you have PostgreSQL installed and running on your system.
 2. Create a new database named `drivetrust`.
    ```sql
    CREATE DATABASE drivetrust;
+   node prisma/seed.js
    ```
 3. Your connection string in `backend/.env` is already set to `postgresql://postgres:postgres@localhost:5432/drivetrust`. Change the username/password if they differ.
 
