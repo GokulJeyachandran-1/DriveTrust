@@ -7,5 +7,7 @@ router.use(verifyToken);
 
 router.get('/', tripController.getUserTrips);
 router.put('/:id/status', tripController.updateTripStatus);
+router.put('/:id/confirm-delivery', tripController.confirmDelivery);
+router.post('/:id/damage-deduction', tripController.submitDamageDeduction);
 
 module.exports = router;

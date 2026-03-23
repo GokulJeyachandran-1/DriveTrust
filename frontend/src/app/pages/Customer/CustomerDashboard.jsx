@@ -3,6 +3,7 @@ import { Plus, ArrowRight, Loader2, Navigation, MapPin, Package, Star } from 'lu
 import PublicProfileModal from '../../components/Profile/PublicProfileModal';
 import { styles } from '../../utils/styles';
 import { getMyLoads, createLoad } from '../../../api/customerService';
+import { createPaymentOrder, openRazorpayCheckout, verifyPayment } from '../../../api/paymentService';
 import api from '../../../api/axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../hooks/useToast';
@@ -48,6 +49,7 @@ const CustomerDashboard = () => {
   const [bids, setBids] = useState([]);
   const [bidsLoading, setBidsLoading] = useState(false);
   const [profileUserId, setProfileUserId] = useState(null);
+  const [payingBidId, setPayingBidId] = useState(null);
   const width = useWindowWidth();
   const isMobile = width < 768;
 
@@ -121,12 +123,36 @@ const CustomerDashboard = () => {
   };
 
   const acceptBid = async (bidId) => {
+    setPayingBidId(bidId);
     try {
-      await api.post(`/customer/loads/${selectedLoadId}/book`, { bidId });
-      toast('Success! Shipment Booked.', 'success');
+      // Step 1: Create Razorpay order (amount is server-derived)
+      const orderData = await createPaymentOrder(bidId);
+
+      // Step 2: Open Razorpay checkout
+      const paymentResponse = await openRazorpayCheckout({
+        orderId: orderData.orderId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        keyId: orderData.keyId,
+        bidId,
+      });
+
+      // Step 3: Verify payment on server (HMAC-SHA256)
+      await verifyPayment(paymentResponse);
+
+      toast('Payment successful! Shipment booked.', 'success');
       fetchLoads();
       setSelectedLoadId(null);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'Payment failed';
+      if (msg !== 'Payment cancelled by user') {
+        toast(msg, 'error');
+      } else {
+        toast('Payment cancelled', 'info');
+      }
+    } finally {
+      setPayingBidId(null);
+    }
   };
 
   return (
@@ -285,9 +311,10 @@ const CustomerDashboard = () => {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={() => acceptBid(bid.id)} 
-                          style={{ ...styles.common.buttonPrimary, width: '100%', height: '44px' }}
+                          disabled={payingBidId === bid.id}
+                          style={{ ...styles.common.buttonPrimary, width: '100%', height: '44px', opacity: payingBidId === bid.id ? 0.7 : 1 }}
                         >
-                          Accept Offer
+                          {payingBidId === bid.id ? 'Processing Payment...' : `Pay ₹${bid.amount} & Book`}
                         </motion.button>
                       )}
                     </div>

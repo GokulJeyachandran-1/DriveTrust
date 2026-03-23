@@ -15,5 +15,7 @@ router.get('/sos', adminController.getSosAlerts);
 router.put('/sos/:id/resolve', adminController.resolveSos);
 router.get('/payments', adminController.getPayments);
 router.put('/payments/:id/release', adminController.releasePayment);
+router.get('/deductions', adminController.getDeductions);
+router.put('/deductions/:id', adminController.reviewDeduction);
 
 module.exports = router;

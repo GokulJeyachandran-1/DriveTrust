@@ -4,6 +4,8 @@ const userController = require('../controllers/userController');
 const { verifyToken } = require('../middleware/authMiddleware');
 
 router.use(verifyToken);
+router.get('/me', userController.getMyProfile);
+router.put('/me', userController.updateMyProfile);
 router.get('/:id/profile', userController.getUserProfile);
 
 module.exports = router;

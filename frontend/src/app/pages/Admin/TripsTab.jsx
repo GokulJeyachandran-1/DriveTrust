@@ -38,7 +38,7 @@ const TripsTab = () => {
       ) : (
         <div style={{ backgroundColor: 'white', borderRadius: '16px', border: `1px solid ${styles.colors.border}`, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <table style={{ minWidth: '900px', width: '100%', borderCollapse: 'collapse', fontSize: '14px', whiteSpace: 'nowrap' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${styles.colors.border}` }}>
                   {['ID', 'Driver', 'Customer', 'Origin', 'Destination', 'Location', 'Status', 'Started'].map(h => (

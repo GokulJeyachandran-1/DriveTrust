@@ -67,71 +67,11 @@ exports.getBidsForLoad = async (req, res) => {
 };
 
 exports.acceptBidAndBook = async (req, res) => {
-  try {
-    const { id: postId } = req.params;
-    const { bidId } = req.body;
-
-    const loadPost = await prisma.loadPost.findUnique({ where: { id: postId } });
-    if (!loadPost || loadPost.customerId !== req.userId) {
-      return res.status(404).json({ error: 'Load post not found' });
-    }
-
-    if (loadPost.status !== 'OPEN') {
-      return res.status(400).json({ error: 'Load is no longer open' });
-    }
-
-    const bid = await prisma.bid.findUnique({ where: { id: bidId } });
-    if (!bid || bid.postId !== postId) {
-      return res.status(404).json({ error: 'Bid not found' });
-    }
-
-    // Escrow Transaction Simulation
-    await prisma.$transaction(async (tx) => {
-      // 1. Mark Bid as ACCEPTED and FUNDS_SECURED
-      await tx.bid.update({
-        where: { id: bidId },
-        data: { status: 'ACCEPTED', escrowStatus: 'FUNDS_SECURED' }
-      });
-
-      // 2. Reject all other pending bids for this post
-      await tx.bid.updateMany({
-        where: { postId, id: { not: bidId } },
-        data: { status: 'REJECTED' }
-      });
-
-      // 3. Mark LoadPost as BOOKED
-      await tx.loadPost.update({
-        where: { id: postId },
-        data: { status: 'BOOKED' }
-      });
-
-      // 4. Create Trip
-      await tx.trip.create({
-        data: {
-          postId,
-          driverId: bid.driverId,
-          currentLocation: loadPost.origin
-        }
-      });
-
-      // 5. Create Payment (10% platform fee)
-      const platformFee = bid.amount * 0.10;
-      const driverPayout = bid.amount - platformFee;
-      await tx.payment.create({
-        data: {
-          bidId: bid.id,
-          amount: bid.amount,
-          platformFee,
-          driverPayout,
-          status: 'COLLECTED',
-          collectedAt: new Date()
-        }
-      });
-    });
-
-    res.json({ message: 'Bid accepted, Escrow secured, and Trip generated securely.' });
-  } catch (error) {
-    console.error('Escrow Booking Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
+  // This endpoint is now handled by the Razorpay payment flow:
+  // 1. POST /api/payments/create-order (creates Razorpay order)
+  // 2. Frontend opens Razorpay checkout
+  // 3. POST /api/payments/verify (verifies + books atomically)
+  return res.status(400).json({
+    error: 'Direct booking is disabled. Please use the Pay & Book flow.'
+  });
 };

@@ -19,7 +19,7 @@ const DriverDashboard = () => {
   const [bidMessage, setBidMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isSosActive, setIsSosActive] = useState({});
-  const [confirmDeliver, setConfirmDeliver] = useState(null);
+  const [confirmArrived, setConfirmArrived] = useState(null);
   const [profileUserId, setProfileUserId] = useState(null);
   const [trackingId, setTrackingId] = useState(null);
   const width = useWindowWidth();
@@ -58,11 +58,20 @@ const DriverDashboard = () => {
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  const startLiveTracking = (trip) => {
+  const startLiveTracking = async (trip) => {
     if (!navigator.geolocation) {
       toast("Geolocation is not supported by your browser", "error");
       return;
     }
+
+    // Auto-set trip to IN_TRANSIT if still BOOKED
+    if (trip.post?.status === 'BOOKED') {
+      try {
+        await updateTripStatus(trip.id, 'IN_TRANSIT');
+        fetchData();
+      } catch (e) { console.error('Failed to set IN_TRANSIT', e); }
+    }
+
     setTrackingId(trip.id);
     socketRef.current.emit('joinTrip', trip.id);
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -79,7 +88,7 @@ const DriverDashboard = () => {
            stopTracking();
         }
       },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
+      { enableHighAccuracy: true, maximumAge: 10000 }
     );
   };
 
@@ -181,32 +190,38 @@ const DriverDashboard = () => {
                       <ShieldAlert size={18} /> {isSosActive[trip.id] ? "ACTIVE" : "SOS"}
                   </motion.button>
 
-                  {trip.status !== 'DELIVERED' && (
+                  {(trip.post?.status === 'BOOKED' || trip.post?.status === 'IN_TRANSIT') && (
                     <motion.button 
                       whileTap={{ scale: 0.96 }}
                       onClick={async () => {
-                        if (confirmDeliver === trip.id) {
+                        if (confirmArrived === trip.id) {
                           try {
-                            await updateTripStatus(trip.id, 'DELIVERED');
-                            toast('Trip marked as delivered!', 'success');
+                            await updateTripStatus(trip.id, 'ARRIVED');
+                            toast('Marked as Arrived! Customer will confirm delivery.', 'success');
                             fetchData();
                           } catch (e) { toast('Failed to update status', 'error'); }
-                          setConfirmDeliver(null);
+                          setConfirmArrived(null);
                         } else {
-                          setConfirmDeliver(trip.id);
-                          toast('Tap Deliver again to confirm', 'info');
-                          setTimeout(() => setConfirmDeliver(null), 4000);
+                          setConfirmArrived(trip.id);
+                          toast('Tap Arrived again to confirm', 'info');
+                          setTimeout(() => setConfirmArrived(null), 4000);
                         }
                       }}
                       style={{ 
                          ...styles.common.buttonPrimary, 
                          flex: 1, 
-                         backgroundColor: styles.colors.success,
+                         backgroundColor: confirmArrived === trip.id ? '#B45309' : styles.colors.success,
                          gap: '8px'
                       }}
                     >
-                      <CheckCircle2 size={18} /> Deliver
+                      <CheckCircle2 size={18} /> {confirmArrived === trip.id ? 'Confirm?' : 'Arrived'}
                     </motion.button>
+                  )}
+
+                  {trip.post?.status === 'ARRIVED' && (
+                    <div style={{ flex: 1, padding: '10px 16px', borderRadius: '12px', backgroundColor: `${styles.colors.success}15`, color: styles.colors.success, fontWeight: 700, fontSize: '14px', textAlign: 'center' }}>
+                      ✓ Arrived — Awaiting customer confirmation
+                    </div>
                   )}
                 </div>
               </motion.div>

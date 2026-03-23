@@ -179,16 +179,80 @@ exports.getPayments = async (req, res) => {
 // PUT /api/admin/payments/:id/release
 exports.releasePayment = async (req, res) => {
   try {
-    const payment = await prisma.payment.findUnique({ where: { id: req.params.id } });
+    const payment = await prisma.payment.findUnique({
+      where: { id: req.params.id },
+      include: { bid: { include: { post: { include: { trip: { include: { deduction: true } } } } } } }
+    });
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
     if (payment.status !== 'COLLECTED') return res.status(400).json({ error: 'Payment must be in COLLECTED status to release' });
 
+    // Check for approved deductions
+    const trip = payment.bid?.post?.trip;
+    const deduction = trip?.deduction;
+    let refundAmount = 0;
+
+    if (deduction && deduction.status === 'APPROVED') {
+      refundAmount = deduction.amount;
+    }
+
+    const finalDriverPayout = payment.driverPayout - refundAmount;
+
     await prisma.payment.update({
       where: { id: req.params.id },
-      data: { status: 'RELEASED', releasedAt: new Date() }
+      data: {
+        status: 'RELEASED',
+        releasedAt: new Date(),
+        refundAmount,
+        driverPayout: finalDriverPayout > 0 ? finalDriverPayout : 0
+      }
     });
 
-    res.json({ message: `₹${payment.driverPayout.toFixed(2)} released to the driver successfully.` });
+    const msg = refundAmount > 0
+      ? `₹${finalDriverPayout.toFixed(2)} released to driver (₹${refundAmount.toFixed(2)} deducted for damages, refunded to customer).`
+      : `₹${payment.driverPayout.toFixed(2)} released to the driver successfully.`;
+
+    res.json({ message: msg });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server Error' });
+  }
+};
+
+// GET /api/admin/deductions
+exports.getDeductions = async (req, res) => {
+  try {
+    const deductions = await prisma.damageDeduction.findMany({
+      include: {
+        trip: {
+          include: {
+            post: { select: { origin: true, destination: true, customer: { select: { name: true } } } },
+            driver: { select: { name: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(deductions);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server Error' });
+  }
+};
+
+// PUT /api/admin/deductions/:id
+exports.reviewDeduction = async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be APPROVED or REJECTED' });
+    }
+
+    await prisma.damageDeduction.update({
+      where: { id: req.params.id },
+      data: { status }
+    });
+
+    res.json({ message: `Deduction ${status.toLowerCase()} successfully` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server Error' });

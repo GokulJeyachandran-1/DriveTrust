@@ -47,3 +47,13 @@ export const releasePayment = async (id) => {
   const res = await api.put(`/admin/payments/${id}/release`);
   return res.data;
 };
+
+export const getAdminDeductions = async () => {
+  const res = await api.get('/admin/deductions');
+  return res.data;
+};
+
+export const reviewDeduction = async (id, status) => {
+  const res = await api.put(`/admin/deductions/${id}`, { status });
+  return res.data;
+};

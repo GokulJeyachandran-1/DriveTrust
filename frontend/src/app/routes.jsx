@@ -7,6 +7,7 @@ import Signup from './pages/Auth/Signup';
 import CustomerDashboard from './pages/Customer/CustomerDashboard';
 import DriverDashboard from './pages/Driver/DriverDashboard';
 import TripsDashboard from './pages/Trips/TripsDashboard';
+import ProfilePage from './pages/Profile/ProfilePage';
 import AdminLayout from './pages/Admin/AdminLayout';
 
 const AppRoutes = () => {
@@ -19,12 +20,14 @@ const AppRoutes = () => {
       <Route element={<ProtectedLayout allowedRoles={['CUSTOMER']} />}>
         <Route path="/customer" element={<CustomerDashboard />} />
         <Route path="/customer/trips" element={<TripsDashboard />} />
+        <Route path="/customer/profile" element={<ProfilePage />} />
       </Route>
 
       {/* Driver Routes */}
       <Route element={<ProtectedLayout allowedRoles={['DRIVER']} />}>
         <Route path="/driver" element={<DriverDashboard />} />
         <Route path="/driver/trips" element={<TripsDashboard />} />
+        <Route path="/driver/profile" element={<ProfilePage />} />
       </Route>
 
       {/* Admin Routes */}

@@ -10,6 +10,16 @@ export const updateTripStatus = async (id, status, location) => {
     return res.data;
 };
 
+export const confirmDelivery = async (tripId) => {
+    const res = await api.put(`/trips/${tripId}/confirm-delivery`);
+    return res.data;
+};
+
+export const submitDamageDeduction = async (tripId, data) => {
+    const res = await api.post(`/trips/${tripId}/damage-deduction`, data);
+    return res.data;
+};
+
 export const submitReview = async (reviewData) => {
     const res = await api.post('/reviews', reviewData);
     return res.data;

@@ -8,7 +8,8 @@ import {
   User,
   Search,
   X,
-  MapPin
+  MapPin,
+  Settings
 } from 'lucide-react';
 import { styles } from '../../utils/styles';
 import { useWindowWidth } from '../../hooks/useWindowWidth';
@@ -84,6 +85,14 @@ const DashboardLayout = ({ children, user, onLogout }) => {
               <div style={{ fontSize: '13px', color: styles.colors.secondary, fontWeight: 500 }}>{user?.role === 'CUSTOMER' ? 'Customer' : 'Driver'}</div>
            </div>
         </div>
+        <motion.button 
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => { setShowProfile(false); navigate(role === 'CUSTOMER' ? '/customer/profile' : '/driver/profile'); }}
+          style={{ ...styles.common.buttonPrimary, width: '100%', gap: '10px', marginBottom: '10px' }}
+        >
+          <Settings size={18} /> View Profile
+        </motion.button>
         <motion.button 
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -216,8 +225,9 @@ const DashboardLayout = ({ children, user, onLogout }) => {
           position: 'fixed', bottom: 0, left: 0, right: 0, height: '70px',
           backgroundColor: styles.colors.surface, borderTop: `1px solid ${styles.colors.border}`,
           display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-          paddingBottom: 'env(safe-area-inset-bottom)', zIndex: 100,
-          boxSizing: 'border-box'
+          paddingBottom: 'env(safe-area-inset-bottom)', zIndex: 10001,
+          boxSizing: 'border-box',
+          boxShadow: '0 -4px 12px rgba(0,0,0,0.05)'
         }}>
           {navLinks.map(link => (
             <motion.button

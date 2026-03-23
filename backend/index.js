@@ -15,6 +15,7 @@ const reviewRoutes = require('./routes/reviewRoutes');
 const sosRoutes = require('./routes/sosRoutes');
 const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const path = require('path');
 
 const app = express();
@@ -56,6 +57,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/sos', sosRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Socket.IO Connection Handler
 io.on('connection', (socket) => {

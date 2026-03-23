@@ -108,7 +108,7 @@ const AdminLayout = () => {
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, marginLeft: isDesktop ? '260px' : 0, minHeight: '100vh' }}>
+      <main style={{ flex: 1, marginLeft: isDesktop ? '260px' : 0, minHeight: '100vh', overflowX: 'hidden', minWidth: 0 }}>
         {/* Top bar for mobile */}
         {!isDesktop && (
           <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${styles.colors.border}`, backgroundColor: styles.colors.surface, position: 'sticky', top: 0, zIndex: 100 }}>
